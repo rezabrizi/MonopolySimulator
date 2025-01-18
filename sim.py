@@ -1,6 +1,25 @@
 import random
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Optional, List
+from typing import Dict, Optional, List, Tuple, Union
+from enum import Enum
+from collections import deque
+
+
+"""
+Monopoly Game. 
+
+Block: any block that you can land on. 
+    - Type
+    - Number
+
+Chance(Block)
+    - List of chance cards that get selected at random
+
+CommunityChest(Block)
+    - List 
+
+
+"""
 
 
 class Board:
@@ -9,272 +28,561 @@ class Board:
         self.initialize_board()
 
     def initialize_board(self):
-        self.tiles: Block = [
-            Block("go"),  # GO
+        self.tiles: list[Block] = [
+            Block(type="go", number=1),  # GO
             Street(
                 name="Mediterranean Avenue",
+                group="brown",
                 price=60,
                 rent=[2, 10, 30, 90, 160, 250],
-                mortgage=30,
-                unmortgage=30,
                 house_price=50,
+            ),
+            CommunityChest(number=3),
+            Street(
+                name="Baltic Avenue",
                 group="brown",
+                price=60,
+                rent=[4, 20, 60, 180, 320, 450],
+                house_price=50,
             ),
-            CommunityChest(),
-            Street(
-                "Baltic Avenue", 60, [4, 20, 60, 180, 320, 450], 30, 30, 50, "brown"
-            ),
-            Tax("Income Tax", 200),
-            RailRoad("Reading Railroad", 200, [25, 50, 100, 200], 100, 100),
-            Street(
-                "Oriental Avenue",
-                100,
-                [6, 30, 90, 270, 400, 550],
-                50,
-                50,
-                50,
-                "light blue",
-            ),
-            Chance(),
-            Street(
-                "Vermont Avenue",
-                100,
-                [6, 30, 90, 270, 400, 550],
-                50,
-                50,
-                50,
-                "light blue",
+            Tax(name="Income Tax", amount=200, number=5),
+            RailRoad(
+                name="Reading Railroad",
+                price=200,
+                rent=[25, 50, 100, 200],
+                number=6,
             ),
             Street(
-                "Connecticut Avenue",
-                120,
-                [8, 40, 100, 300, 450, 600],
-                60,
-                60,
-                50,
-                "light blue",
+                name="Oriental Avenue",
+                group="light blue",
+                price=100,
+                rent=[6, 30, 90, 270, 400, 550],
+                house_price=50,
             ),
-            Block("na"),  # Jail
+            Chance(number=8),
             Street(
-                "St. Charles Place",
-                140,
-                [10, 50, 150, 450, 625, 750],
-                70,
-                70,
-                100,
-                "pink",
-            ),
-            Utility("Electric Company", 150, 0, 75, 75),
-            Street(
-                "States Avenue", 140, [10, 50, 150, 450, 625, 750], 70, 70, 100, "pink"
+                name="Vermont Avenue",
+                group="light blue",
+                price=100,
+                rent=[6, 30, 90, 270, 400, 550],
+                house_price=50,
             ),
             Street(
-                "Virginia Avenue",
-                160,
-                [12, 60, 180, 500, 700, 900],
-                80,
-                80,
-                100,
-                "pink",
+                name="Connecticut Avenue",
+                group="light blue",
+                price=120,
+                rent=[8, 40, 100, 300, 450, 600],
+                house_price=50,
             ),
-            RailRoad("Pennsylvania Railroad", 200, [25, 50, 100, 200], 100, 100),
+            Block(type="jail", number=11),  # Jail
             Street(
-                "St. James Place",
-                180,
-                [14, 70, 200, 550, 750, 950],
-                90,
-                90,
-                100,
-                "orange",
+                name="St. Charles Place",
+                group="pink",
+                price=140,
+                rent=[10, 50, 150, 450, 625, 750],
+                house_price=100,
             ),
-            CommunityChest(),
+            Utility(name="Electric Company", price=150, number=13),
             Street(
-                "Tennessee Avenue",
-                180,
-                [14, 70, 200, 550, 750, 950],
-                90,
-                90,
-                100,
-                "orange",
+                name="States Avenue",
+                group="pink",
+                price=140,
+                rent=[10, 50, 150, 450, 625, 750],
+                house_price=100,
             ),
             Street(
-                "New York Avenue",
-                200,
-                [16, 80, 220, 600, 800, 1000],
-                100,
-                100,
-                100,
-                "orange",
+                name="Virginia Avenue",
+                group="pink",
+                price=160,
+                rent=[12, 60, 180, 500, 700, 900],
+                house_price=100,
             ),
-            Block("na"),  # Free Parking
-            Street(
-                "Kentucky Avenue",
-                220,
-                [18, 90, 250, 700, 875, 1050],
-                110,
-                110,
-                150,
-                "red",
-            ),
-            Chance(),
-            Street(
-                "Indiana Avenue",
-                220,
-                [18, 90, 250, 700, 875, 1050],
-                110,
-                110,
-                150,
-                "red",
+            RailRoad(
+                name="Pennsylvania Railroad",
+                price=200,
+                rent=[25, 50, 100, 200],
+                number=16,
             ),
             Street(
-                "Illinois Avenue",
-                240,
-                [20, 100, 300, 750, 925, 1100],
-                120,
-                120,
-                150,
-                "red",
+                name="St. James Place",
+                group="orange",
+                price=180,
+                rent=[14, 70, 200, 550, 750, 950],
+                house_price=100,
             ),
-            RailRoad("B&O Railroad", 200, [25, 50, 100, 200], 100, 100),
+            CommunityChest(number=18),
             Street(
-                "Atlantic Avenue",
-                260,
-                [22, 110, 330, 800, 975, 1150],
-                130,
-                130,
-                150,
-                "yellow",
+                name="Tennessee Avenue",
+                group="orange",
+                price=180,
+                rent=[14, 70, 200, 550, 750, 950],
+                house_price=100,
             ),
             Street(
-                "Ventnor Avenue",
-                260,
-                [22, 110, 330, 800, 975, 1150],
-                130,
-                130,
-                150,
-                "yellow",
+                name="New York Avenue",
+                group="orange",
+                price=200,
+                rent=[16, 80, 220, 600, 800, 1000],
+                house_price=100,
             ),
-            Utility("Water Works", 150, 0, 75, 75),
+            Block(type="free_parking", number=21),  # Free Parking
             Street(
-                "Marvin Gardens",
-                280,
-                [24, 120, 360, 850, 1025, 1200],
-                140,
-                140,
-                150,
-                "yellow",
+                name="Kentucky Avenue",
+                group="red",
+                price=220,
+                rent=[18, 90, 250, 700, 875, 1050],
+                house_price=150,
             ),
-            Block("jail"),  # Go to Jail
+            Chance(number=23),
             Street(
-                "Pacific Avenue",
-                300,
-                [26, 130, 390, 900, 1100, 1275],
-                150,
-                150,
-                200,
-                "green",
+                name="Indiana Avenue",
+                group="red",
+                price=220,
+                rent=[18, 90, 250, 700, 875, 1050],
+                house_price=150,
             ),
             Street(
-                "North Carolina Avenue",
-                300,
-                [26, 130, 390, 900, 1100, 1275],
-                150,
-                150,
-                200,
-                "green",
+                name="Illinois Avenue",
+                group="red",
+                price=240,
+                rent=[20, 100, 300, 750, 925, 1100],
+                house_price=150,
             ),
-            CommunityChest(),
-            Street(
-                "Pennsylvania Avenue",
-                320,
-                [28, 150, 450, 1000, 1200, 1400],
-                160,
-                160,
-                200,
-                "green",
+            RailRoad(
+                name="B&O Railroad",
+                price=200,
+                rent=[25, 50, 100, 200],
+                number=26,
             ),
-            RailRoad("Short Line", 200, [25, 50, 100, 200], 100, 100),
-            Chance(),
             Street(
-                "Park Place",
-                350,
-                [35, 175, 500, 1100, 1300, 1500],
-                175,
-                175,
-                200,
-                "dark blue",
+                name="Atlantic Avenue",
+                group="yellow",
+                price=260,
+                rent=[22, 110, 330, 800, 975, 1150],
+                house_price=150,
             ),
-            Tax("Luxury Tax", 100),
             Street(
-                "Boardwalk",
-                400,
-                [50, 200, 600, 1400, 1700, 2000],
-                200,
-                200,
-                200,
-                "dark blue",
+                name="Ventnor Avenue",
+                group="yellow",
+                price=260,
+                rent=[22, 110, 330, 800, 975, 1150],
+                house_price=150,
+            ),
+            Utility(name="Water Works", price=150, number=29),
+            Street(
+                name="Marvin Gardens",
+                group="yellow",
+                price=280,
+                rent=[24, 120, 360, 850, 1025, 1200],
+                house_price=150,
+            ),
+            Block(type="go_to_jail", number=31),  # Go to Jail
+            Street(
+                name="Pacific Avenue",
+                group="green",
+                price=300,
+                rent=[26, 130, 390, 900, 1100, 1275],
+                house_price=200,
+            ),
+            Street(
+                name="North Carolina Avenue",
+                group="green",
+                price=300,
+                rent=[26, 130, 390, 900, 1100, 1275],
+                house_price=200,
+            ),
+            CommunityChest(number=34),
+            Street(
+                name="Pennsylvania Avenue",
+                group="green",
+                price=320,
+                rent=[28, 150, 450, 1000, 1200, 1400],
+                house_price=200,
+            ),
+            RailRoad(
+                name="Short Line",
+                price=200,
+                rent=[25, 50, 100, 200],
+                number=36,
+            ),
+            Chance(number=37),
+            Street(
+                name="Park Place",
+                group="dark blue",
+                price=350,
+                rent=[35, 175, 500, 1100, 1300, 1500],
+                house_price=200,
+            ),
+            Tax(name="Luxury Tax", amount=100, number=39),
+            Street(
+                name="Boardwalk",
+                group="dark blue",
+                price=400,
+                rent=[50, 200, 600, 1400, 1700, 2000],
+                house_price=200,
             ),
         ]
 
 
+class ChanceCards(Enum):
+    ADVANCE_TO_GO = "Advance to Go (Collect $200)"
+    BANK_DIVIDEND = "Bank pays you dividend of $50"
+    GO_TO_JAIL = (
+        "Go to Jail - Go directly to Jail - Do not pass Go - Do not collect $200"
+    )
+    ADVANCE_TO_ILLINOIS = "Advance to Illinois Ave. - If you pass Go, collect $200"
+    ADVANCE_TO_ST_CHARLES = (
+        "Advance to St. Charles Place - If you pass Go, collect $200"
+    )
+    NEAREST_UTILITY = "Advance token to the nearest Utility. If unowned, you may buy it from the Bank. If owned, throw dice and pay owner a total ten times the amount thrown."
+    NEAREST_RAILROAD = "Advance token to the nearest Railroad and pay owner twice the rental to which they are otherwise entitled. If Railroad is unowned, you may buy it from the Bank."
+    READING_RAILROAD = "Take a trip to Reading Railroad - If you pass Go, collect $200"
+    BOARDWALK = "Take a walk on the Boardwalk - Advance token to Boardwalk"
+    CHAIRMAN = "Elected Chairman of the Board - Pay each player $50"
+    BUILDING_LOAN = "Your building loan matures - Collect $150"
+    STREET_REPAIRS = (
+        "You have been assessed for street repairs - $40 per house, $115 per hotel"
+    )
+    POOR_TAX = "Pay poor tax of $15"
+    GENERAL_REPAIRS = "Make general repairs on all your property - For each house pay $25, for each hotel pay $100"
+    GET_OUT_OF_JAIL_FREE = (
+        "Get out of Jail Free - This card may be kept until needed, or sold"
+    )
+    GO_BACK_THREE = "Go back three spaces"
+
+
+class CommunityChestCards(Enum):
+    ADVANCE_TO_GO = "Advance to Go (Collect $200)"
+    BANK_ERROR = "Bank error in your favor - Collect $200"
+    DOCTOR_FEE = "Doctor's fee - Pay $50"
+    STOCK_SALE = "From sale of stock, you get $50"
+    GO_TO_JAIL = (
+        "Go to Jail - Go directly to Jail - Do not pass Go - Do not collect $200"
+    )
+    GET_OUT_OF_JAIL_FREE = (
+        "Get out of Jail Free - This card may be kept until needed, or sold"
+    )
+    HOLIDAY_FUND = "Holiday fund matures - Receive $100"
+    INCOME_TAX_REFUND = "Income tax refund - Collect $20"
+    BIRTHDAY = "It is your birthday - Collect $10 from every player"
+    LIFE_INSURANCE = "Life insurance matures - Collect $100"
+    HOSPITAL_FEES = "Pay hospital fees of $100"
+    SCHOOL_FEES = "Pay school fees of $50"
+    CONSULTANCY_FEE = "Receive $25 consultancy fee"
+    STREET_REPAIRS = (
+        "You are assessed for street repairs - $40 per house, $115 per hotel"
+    )
+    BEAUTY_CONTEST = "You have won second prize in a beauty contest - Collect $10"
+    INHERITANCE = "You inherit $100"
+
+
 class Block(ABC):
-    def __init__(self, type):
+
+    def __init__(self, type, number):
         self.type = type
+        self.number = number
 
 
 class Chance(Block):
-    def __init__(self):
-        super().__init__("chance")
+    chance_deque = deque([chance for chance in ChanceCards])
 
-    @staticmethod
-    def get_chance_card():
-        cards = ["Advance to Go", "Bank pays you dividend of $50", "Go to Jail"]
-        return random.choice(cards)
+    def __init__(self, number):
+        super().__init__("chance", number)
+
+    @classmethod
+    def get_chance_card(cls):
+        card = cls.chance_deque.pop()
+        if card != ChanceCards.GET_OUT_OF_JAIL_FREE:
+            cls.chance_deque.appendleft(card)
+        return card
+
+    @classmethod
+    def put_jail_free_card_back(cls):
+        cls.chance_deque.appendleft(ChanceCards.GET_OUT_OF_JAIL_FREE)
 
 
 class CommunityChest(Block):
-    def __init__(self):
-        super().__init__("community_chest")
+    community_chest_deque = deque(
+        [community_chest for community_chest in CommunityChestCards]
+    )
 
-    @staticmethod
-    def get_community_chest_card():
-        # Simplified example of community chest cards
-        cards = ["Doctor's fees: Pay $50", "You inherit $100", "Go to Jail"]
-        return random.choice(cards)
+    def __init__(self, number):
+        super().__init__("community_chest", number)
+
+    @classmethod
+    def get_community_chest_card(cls):
+        card = cls.community_chest_deque.pop()
+        if card != CommunityChestCards.GET_OUT_OF_JAIL_FREE:
+            cls.community_chest_deque.appendleft(card)
+        return card
+
+    @classmethod
+    def put_jail_free_card_back(cls):
+        cls.community_chest_deque.appendleft(CommunityChestCards.GET_OUT_OF_JAIL_FREE)
+
+
+class Tax(Block):
+    def __init__(self, name, amount, number):
+        super().__init__("tax", number)
+        self.name = name
+        self.amount = amount
+
+    def apply_tax(self, player: "Player"):
+        player.pay(self.amount)
+
+
+class Property(Block):
+    def __init__(self, name, price):
+        super().__init__("property")
+        self.name = name
+        self.price = price
+        self.mortgage = self.price // 2
+        self.unmortgage = self.mortgage * 1.1
+        self.mortgaged = False
+        self.owner: Optional[Player] = None
+
+    @abstractmethod
+    def calculate_rent(self):
+        pass
+
+
+class Utility(Property):
+    def __init__(self, name, price):
+        super().__init__(name, price)
+
+    def calculate_rent(self, dice_roll, player):
+        if self.owner is None:
+            return 0
+        if self.mortgaged == True:
+            return 0
+        if self.owner == player:
+            return 0
+        return dice_roll * (10 if len(self.owner.utilities) == 2 else 4)
+
+
+class RailRoad(Property):
+    def __init__(self, name, price, rent):
+        super().__init__(name, price, rent)
+        self.rent = rent
+
+    def calculate_rent(self, player):
+        if self.owner is None:
+            return 0
+        if self.mortgaged == True:
+            return 0
+        if self.owner == player:
+            return 0
+        railroads_owned = len(self.owner.railroads)
+        return self.rent[railroads_owned - 1]
+
+
+class Street(Property):
+    def __init__(
+        self,
+        name: str,
+        group: str,
+        price: int,
+        rent: int,
+        house_price: int,
+    ):
+        super().__init__(name, price, rent)
+        self.house_price = house_price
+        self.group = group
+        self.rent = rent
+        # level 0 - normal rent
+        # level 1 - all cards owned
+        # level 2:5 - houses 1 to 4
+        # level 6 - hotel
+        self.level = 0
+
+    def calculate_rent(self, player):
+        if self.owner is None:
+            return 0
+        if self.mortgaged == True:
+            return 0
+        if self.owner == player:
+            return 0
+        return self.rent[self.level]
+
+
+class Bank:
+    def __init__(self):
+        pass
+
+    def earn(self, amount):
+        pass
 
 
 class Player:
     def __init__(
-        self, name, w_buy_building, w_buy_railroad, w_buy_utility, w_roll_double_in_jail
+        self,
+        name,
+        w_buy_building,
+        w_buy_railroad,
+        w_buy_utility,
+        w_roll_double_in_jail,
+        w_use_jail_free_card,
+        min_cash,
     ):
-        self.name = name
-        self.w_buy_building = w_buy_building
-        self.w_buy_railroad = w_buy_railroad
-        self.w_buy_utility = w_buy_utility
-        self.w_roll_double_in_jail = w_roll_double_in_jail
-        self.tries_in_jail = 3
-        self.consecutive_doubles = 0
-        self.is_in_jail = False
-        self.cash = 1500
-        self.total_assets = 1500
+        self.name: str = name
+        self.w_buy_building: float = w_buy_building
+        self.w_buy_railroad: float = w_buy_railroad
+        self.w_buy_utility: float = w_buy_utility
+        self.w_use_jail_free_card: float = w_use_jail_free_card
+        self.w_roll_double_in_jail: float = w_roll_double_in_jail
+        self.min_cash: int = min_cash
+        self.jail_roll_attempts: int = 0
+        self.consecutive_doubles: int = 0
+        self.is_in_jail: bool = False
+        self.cash: int = 1500
+        self.liquidity: int = 1500
         self.streets: Dict[str, List[Street]] = {}
-        self.railroads = []
-        self.utilities = []
-        self.in_game = True
-        self.position = 0
+        self.railroads: List[RailRoad] = []
+        self.utilities: List[Utility] = []
+        self.is_in_game: bool = True
+        self.position: int = 0
+        self.last_dice_roll: int = 0
+        self.community_chest_jail_free_card: bool = False
+        self.chance_jail_free_card: bool = False
 
-    def should_buy(self, property_type):
-        if property_type == "building":
+    def has_jail_free_card(self) -> bool:
+        return self.community_chest_jail_free_card or self.chance_jail_free_card
+
+    def decide_to_use_jail_free_card(self) -> bool:
+        return random.random() < self.w_use_jail_free_card
+
+    def use_jail_free_card(self) -> None:
+        if self.chance_jail_free_card:
+            self.chance_jail_free_card = False
+            Chance.put_jail_free_card_back()
+        elif self.community_chest_jail_free_card:
+            self.community_chest_jail_free_card = False
+            CommunityChest.put_jail_free_card_back()
+        else:
+            raise Exception(
+                "Should only call this when the player has a jail free card"
+            )
+
+    def reset_jail_roll_attempts(self):
+        self.jail_roll_attempts = 0
+
+    def decide_to_roll_for_doubles(self) -> bool:
+        return random.random() < self.w_roll_double_in_jail
+
+    def get_valid_expandable_sets(self):
+        """Get a dictionary of all the compeleted sets that still have capacity to build houses on"""
+        sets: Dict[str, List[Street]] = {}
+        for group, properties in self.streets.items():
+            if len(properties) == 3 and not all(prop.level == 6 for prop in properties):
+                sets[group] = properties
+
+        return sets
+
+    def buy_houses_and_hotels(self, priority: str = "quantity_price"):
+        """
+        Buy houses and hotels based on the specified priority:
+        - "random": Randomize the order of groups.
+        - "quantity_price": Sort groups based on total house levels and minimum house price.
+        """
+        from random import shuffle
+
+        # Get all completed sets that can still be expanded (not maxed out)
+        completed_sets = self.get_valid_expandable_sets()
+
+        # Determine group order based on the priority
+        if priority == "random":
+            groups = list(completed_sets.keys())
+            shuffle(groups)
+        elif priority == "quantity_price":
+            groups = [
+                item[0]
+                for item in sorted(
+                    completed_sets.items(),
+                    key=lambda item: (
+                        sum(
+                            prop.level for prop in item[1]
+                        ),  # Total house levels in the group
+                        min(
+                            prop.house_price for prop in item[1]
+                        ),  # Minimum house price
+                    ),
+                )
+            ]
+        else:
+            raise ValueError("Invalid priority. Use 'random' or 'quantity_price'.")
+
+        # Continue building while there is cash above min_cash
+        while self.cash > self.min_cash:
+            built = False  # Track if any house was built in this iteration
+
+            # Iterate through the prioritized groups
+            for group in groups:
+                properties = completed_sets[group]
+
+                # Find the properties with the minimum house level in the group
+                min_level = min(property.level for property in properties)
+                target_properties = [p for p in properties if p.level == min_level]
+
+                # Attempt to build one house on each property with the least houses in the group
+                for property in target_properties:
+                    if self.cash - property.house_price >= self.min_cash:
+                        self.buy_house(property)
+                        built = True
+                    else:
+                        break  # Stop if funds are insufficient for further houses
+
+                # If no houses can be built in this group, move to the next group
+                if not built:
+                    continue
+
+            # Break the loop if no houses were built in this iteration
+            if not built:
+                break
+
+    def transfer_ownership_of_all_assets_to_another_player(self, to: "Player"):
+        pass
+
+    def transfer_ownership_of_all_assets_to_the_bank(self, to: Bank):
+        ## Technically bank should auction everything
+        ##
+        pass
+
+    def transfer_ownership_of_all_assets(self, to: Union["Player", Bank]):
+        if isinstance(to, Player):
+            self.transfer_ownership_of_all_assets_to_another_player(to=to)
+        elif isinstance(to, Bank):
+            self.transfer_ownership_of_all_assets_to_the_bank(to=to)
+
+    def pay(self, amount, to: Union["Player", Bank]):
+        if self.liquidity < amount:
+            self.is_in_game = False
+            self.transfer_ownership_of_all_assets(to)
+            return
+        if self.cash < amount:
+            self.raise_fund(amount=amount)
+        to.earn(amount=amount)
+
+    def earn(self, amount):
+        self.cash += amount
+
+    def decide_to_buy_property_random(
+        self, property: Union[Street, RailRoad, Utility]
+    ) -> bool:
+        if isinstance(property, Street):
             return random.random() < self.w_buy_building
-        elif property_type == "railroad":
+        elif isinstance(property, RailRoad):
             return random.random() < self.w_buy_railroad
-        elif property_type == "utility":
+        elif isinstance(property, Utility):
             return random.random() < self.w_buy_utility
         return False
 
+    def decide_to_buy_property(self, property: Union[Street, RailRoad, Utility]):
+        return self.decide_to_buy_property_random(property)
+
     def buy_property(self, property: "Property"):
         self.cash -= property.price
-        self.total_assets -= property.price
+        self.liquidity -= property.price
+        self.liquidity += property.mortgage
         if isinstance(property, Street):
             if property.group not in self.streets:
                 self.streets[property.group] = []
@@ -283,30 +591,12 @@ class Player:
             self.railroads.append(property)
         elif isinstance(property, Utility):
             self.utilities.append(property)
-        self.total_assets += property.mortgage
-
-    def get_valid_expandable_sets(self):
-        """Get a dictionary of all the compeleted sets that still have capacity to build houses on"""
-        sets: Dict[str, List[Street]] = {}
-        for group, properties in self.streets.items():
-            if len(properties) == 3 and not all(prop.level == 6 for prop in properties):
-                sets[group] = properties
-        sorted_sets = dict(
-            sorted(
-                sets.items(),
-                key=lambda item: (
-                    sum(prop.level for prop in item[1]),
-                    min(prop.house_price for prop in item[1]),
-                ),
-            )
-        )
-        return sorted_sets
 
     def buy_house(self, property: "Street"):
         property.level += 1
         self.cash -= property.house_price
-        self.total_assets -= property.house_price
-        self.total_assets += property.house_price // 2
+        self.liquidity -= property.house_price
+        self.liquidity += property.house_price // 2
 
     def get_streets_with_houses(self):
         return [
@@ -321,10 +611,8 @@ class Player:
         """This is one a hell of a function. It tries to raise funds by
         1. Selling houses based on the cheapest house prices
         2. Mortgaging properties with the least number of houses owned in the group and the cheapest price to mortgage
-        NOTE: It is assumed this function is only called if it is actually possible to achieve amount
+        NOTE: It is assumed this function is only called if it is actually possible to achieve amount (total_assets > amount)
         """
-        if self.cash >= amount:
-            return
 
         def raise_fund_by_selling_houses():
             streets_with_houses = self.get_streets_with_houses()
@@ -337,7 +625,7 @@ class Player:
             while self.cash < amount and streets_with_houses:
                 property = streets_with_houses[-1]
                 self.cash += property.house_price // 2
-                self.total_assets -= property.house_price // 2
+                self.liquidity -= property.house_price // 2
                 property.level -= 1
                 if property.level == 1:
                     streets_with_houses.pop()
@@ -369,7 +657,7 @@ class Player:
                     for property in properties:
                         if not property.mortgaged:
                             self.cash += property.mortgage
-                            self.total_assets -= property.mortgage
+                            self.liquidity -= property.mortgage
                             property.mortgaged = True
                         if self.cash >= amount:
                             return
@@ -380,207 +668,196 @@ class Player:
 
         raise_fund_by_mortgaging_properties()
 
-    def update_position(self, steps, board_size):
-        self.position = (self.position + steps) % (board_size)
+    def move(self, steps, board_size):
+        self.last_dice_roll = steps
+        self.position = self.position + steps
+        if self.position / board_size >= 1:
+            self.cash += 200
+            self.liquidity += 200
+        self.position %= board_size
+
+    def get_position(self):
+        return self.position
 
     def go_to_jail(self):
         self.is_in_jail = True
         self.position = 10
 
-    def pay_rent(self, rent):
-        if self.cash < rent:
-            self.in_game = False
-        else:
-            self.cash -= rent
-
-
-class Tax(Block):
-    def __init__(self, name, amount):
-        super().__init__("tax")
-        self.name = name
-        self.amount = amount
-
-    def apply_tax(self, player: Player):
-        player.cash -= self.amount
-        if player.cash < 0:
-            player.in_game = False
-
-
-class Property(Block):
-    def __init__(self, name, price, rent, mortgage, unmortgage):
-        super().__init__("property")
-        self.name = name
-        self.price = price
-        self.rent = rent
-        self.mortgage = self.price // 2
-        self.unmortgage = self.mortgage * 1.1
-        self.mortgaged = False
-        self.owner: Optional[Player] = None
-
-    @abstractmethod
-    def calculate_rent(self):
-        pass
-
-
-class Street(Property):
-    def __init__(self, name, price, rent, mortgage, unmortgage, house_price, group):
-        super().__init__(name, price, rent, mortgage, unmortgage)
-        self.house_price = house_price
-        self.group = group
-        # level 0 - normal rent
-        # level 1 - all cards owned
-        # level 2:5 - houses 1 to 4
-        # level 6 - hotel
-        self.level = 0
-
-    def calculate_rent(self, player):
-        if self.owner is None:
-            return 0
-        if self.mortgaged == True:
-            return 0
-        if self.owner == player:
-            return 0
-        return self.rent[self.level]
-
-
-class Utility(Property):
-    def __init__(self, name, price, rent, mortgage, unmortgage):
-        super().__init__(name, price, rent, mortgage, unmortgage)
-
-    def calculate_rent(self, dice_roll, player):
-        if self.owner is None:
-            return 0
-        if self.mortgaged == True:
-            return 0
-        if self.owner == player:
-            return 0
-        return dice_roll * (10 if len(self.owner.utilities) == 2 else 4)
-
-
-class RailRoad(Property):
-    def __init__(self, name, price, rent, mortgage, unmortgage):
-        super().__init__(name, price, rent, mortgage, unmortgage)
-
-    def calculate_rent(self, player):
-        if self.owner is None:
-            return 0
-        if self.mortgaged == True:
-            return 0
-        if self.owner == player:
-            return 0
-        railroads_owned = len(self.owner.railroads)
-        return self.rent[railroads_owned - 1]
-
 
 class Game:
     def __init__(self, p1, p2, p3=None, p4=None):
+        # Create a game board
         self.board = Board()
-        self.players = [p1, p2]
+        self.players: List[Player] = [p1, p2]
         if p3:
             self.players.append(p3)
         if p4:
             self.players.append(p4)
+        self.bank = Bank()
         self.current_player_index = 0
 
     def roll_dice(self):
         return random.randint(1, 6), random.randint(1, 6)
 
-    def _player_in_jail(self, player: Player):
-        # Roll dice to attempt a double
-        d1, d2 = self.roll_dsice()
+    def next_player(self):
+        self.current_player_index = (self.current_player_index + 1) % len(self.players)
 
-        if (
-            player.tries_in_jail > 0 and random.random() < player.w_roll_double_in_jail
-        ):  # Player can try rolling for doubles
-            if d1 == d2:  # Rolled a double, release player
-                player.is_in_jail = False
-                player.tries_in_jail = 3  # Reset tries for next jail visit
-                return d1, d2
-            else:  # Failed to roll a double
-                player.tries_in_jail -= 1
-                return -1, -1  # Indicates no movement this turn
-        else:  # No tries left, or the player just didn't want to role a double; deduct $50 fine
-            player.cash -= 50
-            player.is_in_jail = False
-            player.tries_in_jail = 3  # Reset tries for next jail visit
-            return d1, d2
+    def check_win_condition(self) -> Optional[Player]:
+        active_players = [p for p in self.players if p.is_in_game]
+        if len(active_players) == 1:
+            return active_players[0]
+        return None
 
     def play_turn(self):
-        player: Player = self.players[self.current_player_index]
-        if not player.in_game:
-            self.next_player()
-            return
+        while True:
+            player = self.players[self.current_player_index]
 
-        d1, d2 = 0, 0
+            if not player.is_in_game:
+                self.next_player()
+                continue
 
-        if player.is_in_jail:
-            d1, d2 = self._player_in_jail(player)
-        else:
             d1, d2 = self.roll_dice()
+            if player.is_in_jail:
+                skip, d1_j, d2_j = self.attempt_jail_break(player)
+                if skip:
+                    self.next_player()
+                    continue
+                if d1 and d2:
+                    d1 = d1_j
+                    d2 = d2_j
 
-        # Proceed with normal movement if dice rolled successfully
-        if d1 > 0 and d2 > 0:
-            player.update_position(d1 + d2, len(self.board.tiles))
-            self.handle_landing(player)
-            self.handle_houses_and_hotels(player)
+            player.move(d1 + d2, len(self.board.tiles))
+            tile = self.board.tiles[player.position]
+            self.handle_tile_landing(player, tile)
 
-        if d1 != d2:  # No extra turn unless doubles rolled
-            player.consecutive_doubles = 0
-            self.next_player()
-        else:
-            player.consecutive_doubles += 1
-            if player.consecutive_doubles == 3:
+            # DOUBLE DICE CHECKS
+            if d1 == d2:
+                player.consecutive_doubles += 1
+                if player.consecutive_doubles == 3:
+                    player.go_to_jail()
+                    player.consecutive_doubles = 0
+                    self.next_player()
+            else:
                 player.consecutive_doubles = 0
-                player.go_to_jail()
+                self.next_player()
 
-    def handle_landing(self, player: Player):
-        current_tile: Block = self.board.tiles[player.position]
+            # POST MOVE ACTIONS
 
-        if current_tile.type == "jail":
+            player.buy_houses_and_hotels()
+            winner = self.check_win_condition()
+            if winner:
+                print(f"player {winner.name} has won!")
+                break
+
+    def handle_tile_landing(self, player: Player, tile: Block):
+        if isinstance(tile, Street):
+            self.handle_street_landing(player, tile)
+        elif isinstance(tile, RailRoad):
+            self.handle_railroad_landing(player, tile)
+        elif isinstance(tile, Utility):
+            self.handle_utility_landing(player, tile)
+        elif isinstance(tile, Chance):
+            self.handle_chance_landing(player, tile)
+        elif isinstance(tile, CommunityChest):
+            self.handle_community_chest_landing(player, tile)
+        elif isinstance(tile, Tax):
+            self.handle_tax_landing(player, tile)
+        elif isinstance(tile, Block) and tile.type == "go_to_jail":
             player.go_to_jail()
-        elif current_tile.type == "go":
-            player.cash += 200
 
-        elif isinstance(current_tile, Property):
-            if current_tile.owner is None and player.cash >= current_tile.price:
-                if player.should_buy(current_tile.type):
-                    player.cash -= current_tile.price
-                    player.properties.append(current_tile)
-                    current_tile.owner = player
-            elif current_tile.owner is not None and current_tile.owner != player:
-                rent = current_tile.calculate_rent()
-                player.pay_rent(rent)
+    def handle_street_landing(self, player: Player, street: Street):
+        if street.owner is None:
+            # Player can buy the property if they have enough money
+            if player.decide_to_buy_property(street):
+                player.buy_property(street)
+        elif street.owner != player and street.owner.is_in_game:
+            # Player pays rent if the property is owned
+            rent = street.calculate_rent(player)
+            player.pay(rent, street.owner)
+            street.owner.earn(rent)
 
-        elif isinstance(current_tile, Tax):
-            current_tile.apply_tax(player)
+    def handle_railroad_landing(self, player: Player, railroad: RailRoad):
+        if railroad.owner is None:
+            # Player can buy the railroad if they have enough money
+            if player.decide_to_buy_property(railroad):
+                player.buy_property(railroad)
+        elif railroad.owner != player and railroad.owner.is_in_game:
+            # Player pays rent to the railroad owner
+            rent = railroad.calculate_rent(player)
+            player.pay(rent, railroad.owner)
+            railroad.owner.earn(rent)
 
-        elif isinstance(current_tile, Chance):
-            card = current_tile.get_chance_card()
-            print(f"Chance Card: {card}")
-            if card == "Advance to Go":
-                player.position = 0
-                player.cash += 200  # Collect $200 for passing GO
-            elif card == "Bank pays you dividend of $50":
-                player.cash += 50
-            elif card == "Go to Jail":
-                player.go_to_jail()
+    def handle_utility_landing(self, player: Player, utility: Utility):
+        if utility.owner is None:
+            # Player can buy the utility if they have enough money
+            if player.decide_to_buy_property(utility):
+                player.buy_property(utility)
+        elif utility.owner != player and utility.owner.is_in_game:
+            # Player pays rent based on dice roll
+            dice_roll = (
+                player.last_dice_roll
+            )  # Assuming dice roll is stored on the player
+            rent = utility.calculate_rent(dice_roll, player)
+            player.pay(rent, utility.owner)
+            utility.owner.earn(rent)
 
-        elif isinstance(current_tile, CommunityChest):
-            card = current_tile.get_community_chest_card()
-            print(f"Community Chest Card: {card}")
-            if card == "Doctor's fees: Pay $50":
-                player.cash -= 50
-                if player.cash < 0:
-                    player.in_game = False
-            elif card == "You inherit $100":
-                player.cash += 100
-            elif card == "Go to Jail":
-                player.go_to_jail()
+    def handle_chance_landing(self, player: Player, chance: Chance):
+        card = Chance.get_chance_card()
+        # Handle the effect of the chance card
+        self.resolve_card_effect(player, card)
+
+    def handle_community_chest_landing(
+        self, player: Player, community_chest: CommunityChest
+    ):
+        card = CommunityChest.get_community_chest_card()
+        # Handle the effect of the community chest card
+        self.resolve_card_effect(player, card)
+
+    def handle_tax_landing(self, player: Player, tax: Tax):
+        # Player pays the tax amount
+        player.pay(tax.amount, self.bank)
+
+    def resolve_card_effect(self, player: Player, card: Enum):
+        # Implement logic for resolving the effects of Chance or Community Chest cards
+        pass
+
+    def attempt_jail_break(
+        self, player: Player
+    ) -> Tuple[bool, Optional[int], Optional[int]]:
+        # Check if the player has a "Get Out of Jail Free" card
+        if player.has_jail_free_card():
+            use_card = player.decide_to_use_jail_free_card()
+            if use_card:
+                player.use_jail_free_card()
+                player.jail_roll_attempts()
+                d1, d2 = self.roll_dice()
+                return (False, d1, d2)
+
+        # Check if the player has attempted rolling a double less than 3 times
+        if player.jail_roll_attempts < 3:
+            roll_doubles = player.decide_to_roll_for_doubles()
+            if roll_doubles:
+                d1, d2 = self.roll_dice()
+                if d1 == d2:  # Player rolled a double
+                    player.reset_jail_roll_attempts()  # Reset attempts
+                    return (False, d1, d2)
+                else:  # Double not rolled, increment attempts
+                    player.jail_roll_attempts += 1
+                    return (True, None, None)
+
+        # If all attempts to roll a double fail, the player pays $50
+        player.pay(50)
+        if player.is_in_game:
+            player.reset_jail_roll_attempts()
+            d1, d2 = self.roll_dice()
+            return (False, d1, d2)
+        else:
+            return (True, -1, -1)
 
     def handle_houses_and_hotels(self, player: Player):
         # Group properties by set
         sets_owned = {}
-        for property in player.properties:
+        for property in player.streets:
             if isinstance(property, Street):
                 if property.group not in sets_owned:
                     sets_owned[property.group] = []
@@ -611,7 +888,7 @@ class Game:
 
         # Attempt to build houses or hotels
         for group, properties in sorted_sets:
-            while player.cash > 0:
+            while player.cash > player.min_cash:
                 # Find property with the fewest houses in the set
                 min_houses = min(p.houses for p in properties)
                 target_properties = [p for p in properties if p.houses == min_houses]
@@ -628,17 +905,10 @@ class Game:
                 if not built:
                     break
 
-    def next_player(self):
-        self.current_player_index = (self.current_player_index + 1) % len(self.players)
-
-    def check_win_condition(self):
-        active_players = [p for p in self.players if p.in_game]
-        return len(active_players) == 1
-
     def simulate_game(self):
         while not self.check_win_condition():
             self.play_turn()
-        winner = [p for p in self.players if p.in_game][0]
+        winner = [p for p in self.players if p.is_in_game][0]
         return winner
 
 
