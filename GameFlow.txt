@@ -91,3 +91,9 @@ Player Class
 - last_dice_roll: last dice roll number just needed for utilities calculation
 - community_chest_jail_free_card: If the player owns a community cheest jail free card
 - chance_jail_free_card: If the player owns a chance jail free card
+
+
+
+Things To implement: 
+-  Unmortgaging algorithm
+    - Periodically unmortgage cards 
