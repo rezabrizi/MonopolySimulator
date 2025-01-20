@@ -5,23 +5,6 @@ from enum import Enum
 from collections import deque
 
 
-"""
-Monopoly Game. 
-
-Block: any block that you can land on. 
-    - Type
-    - Number
-
-Chance(Block)
-    - List of chance cards that get selected at random
-
-CommunityChest(Block)
-    - List 
-
-
-"""
-
-
 class Board:
     def __init__(self):
         self.tiles = []
@@ -383,8 +366,8 @@ class Utility(Property):
 
 
 class RailRoad(Property):
-    def __init__(self, name, price, rent, number):
-        super().__init__(name, price, rent, number)
+    def __init__(self, name: str, price: int, rent: List[int], number: int):
+        super().__init__(name, price, number)
         self.rent = rent
 
     def calculate_rent(self, player):
@@ -454,7 +437,7 @@ class Street(Property):
             return 0
         if self.owner == player:
             return 0
-        return self.rent[self.level]
+        return self.rent[self.level - 1]
 
 
 class Bank:
@@ -537,6 +520,69 @@ class Player:
 
     def decide_to_roll_for_doubles(self) -> bool:
         return random.random() < self.w_roll_double_in_jail
+
+    def advance_to_illinois(self) -> None:
+        if self.position > 24:
+            self.earn(200)
+        self.position = 24
+
+    def advance_to_st_charles(self) -> None:
+        if self.position > 11:
+            self.earn(200)
+        self.position = 11
+
+    def advance_to_nearest_utility(self):
+        if self.position < 12:
+            self.position = 12
+        else:
+            self.position = 28
+
+    def advance_to_nearest_railroad(self):
+        if self.position < 5 or self.position > 35:
+            self.position = 5
+        if self.position < 15:
+            self.position = 15
+        if self.position < 25:
+            self.position = 25
+        if self.position < 35:
+            self.position = 35
+
+    def advance_to_reading_railroad(self):
+        if self.position > 5:
+            self.earn(200)
+        self.position = 5
+
+    def advance_to_go(self):
+        self.position = 0
+        self.earn(200)
+
+    def advance_to_boardwalk(self):
+        self.position = 39
+
+    def determine_street_repair_fee(self):
+        total = 0
+        for _group, streets in self.streets.items():
+            for street in streets:
+                if street.level == 6:
+                    total += 115
+                elif street.level >= 2:
+                    num_houses = street.level - 1
+                    total += 40 * num_houses
+        return total
+
+    def determine_general_repair_fee(self):
+        total = 0
+        for _group, streets in self.streets.items():
+            for street in streets:
+                if street.level == 6:
+                    total += 100
+                elif street.level >= 2:
+                    num_houses = street.level - 1
+                    total += 25 * num_houses
+        return total
+
+    def go_back_three(self, board_size: int):
+        self.position = (self.position - 3 + board_size) % board_size
 
     def get_valid_expandable_sets(self) -> Dict[str, List[Street]]:
         """Get a dictionary of all the compeleted sets that still have capacity to build houses on"""
@@ -711,9 +757,9 @@ class Player:
 
     def transfer_ownership_of_all_assets(self, to: Union["Player", Bank]):
         if isinstance(to, Player):
-            self.transfer_ownership_of_all_assets_to_another_player(to=to)
+            self.transfer_ownership_of_all_assets_to_another_player(to)
         elif isinstance(to, Bank):
-            self.transfer_ownership_of_all_assets_to_the_bank(to=to)
+            self.transfer_ownership_of_all_assets_to_the_bank(to)
 
     def pay(self, amount, to: Union["Player", Bank]):
         if self.liquidity < amount:
@@ -724,7 +770,7 @@ class Player:
             self.raise_fund(amount=amount)
         to.earn(amount=amount)
 
-    def earn(self, amount):
+    def earn(self, amount: int):
         self.cash += amount
         self.liquidity += amount
 
@@ -809,6 +855,8 @@ class Player:
                 property_frequency[len(self.utilities)] = []
             property_frequency[len(self.utilities)].extend(self.utilities)
 
+            if not property_frequency:
+                return
             property_frequency = dict(
                 sorted(
                     property_frequency.items(),
@@ -875,45 +923,40 @@ class Game:
         return None
 
     def play_turn(self):
-        while True:
-            player = self.players[self.current_player_index]
+        player = self.players[self.current_player_index]
 
-            if not player.is_in_game:
+        if not player.is_in_game:
+            self.next_player()
+            return
+
+        d1, d2 = self.roll_dice()
+        if player.is_in_jail:
+            skip, d1_j, d2_j = self.attempt_jail_break(player)
+            if skip:
                 self.next_player()
-                continue
+                return
+            if d1 and d2:
+                d1 = d1_j
+                d2 = d2_j
 
-            d1, d2 = self.roll_dice()
-            if player.is_in_jail:
-                skip, d1_j, d2_j = self.attempt_jail_break(player)
-                if skip:
-                    self.next_player()
-                    continue
-                if d1 and d2:
-                    d1 = d1_j
-                    d2 = d2_j
+        player.move(d1 + d2, len(self.board.tiles))
+        tile = self.board.tiles[player.position]
+        self.handle_tile_landing(player, tile)
 
-            player.move(d1 + d2, len(self.board.tiles))
-            tile = self.board.tiles[player.position]
-            self.handle_tile_landing(player, tile)
-
-            # DOUBLE DICE CHECKS
-            if d1 == d2:
-                player.consecutive_doubles += 1
-                if player.consecutive_doubles == 3:
-                    player.go_to_jail()
-                    player.consecutive_doubles = 0
-                    self.next_player()
-            else:
+        # DOUBLE DICE CHECKS
+        if d1 == d2:
+            player.consecutive_doubles += 1
+            if player.consecutive_doubles == 3:
+                player.go_to_jail()
                 player.consecutive_doubles = 0
                 self.next_player()
+        else:
+            player.consecutive_doubles = 0
+            self.next_player()
 
-            # POST MOVE ACTIONS
-            player.unmortgage_properties()
-            player.buy_houses_and_hotels()
-            winner = self.check_win_condition()
-            if winner:
-                print(f"player {winner.name} has won!")
-                break
+        # POST MOVE ACTIONS
+        player.unmortgage_properties()
+        player.buy_houses_and_hotels()
 
     def handle_tile_landing(self, player: Player, tile: Block):
         if isinstance(tile, Street):
@@ -940,7 +983,6 @@ class Game:
             # Player pays rent if the property is owned
             rent = street.calculate_rent(player)
             player.pay(rent, street.owner)
-            street.owner.earn(rent)
 
     def handle_railroad_landing(self, player: Player, railroad: RailRoad):
         if railroad.owner is None:
@@ -951,7 +993,6 @@ class Game:
             # Player pays rent to the railroad owner
             rent = railroad.calculate_rent(player)
             player.pay(rent, railroad.owner)
-            railroad.owner.earn(rent)
 
     def handle_utility_landing(self, player: Player, utility: Utility):
         if utility.owner is None:
@@ -965,7 +1006,6 @@ class Game:
             )  # Assuming dice roll is stored on the player
             rent = utility.calculate_rent(dice_roll, player)
             player.pay(rent, utility.owner)
-            utility.owner.earn(rent)
 
     def handle_chance_landing(self, player: Player, chance: Chance):
         card = Chance.get_chance_card()
@@ -984,8 +1024,103 @@ class Game:
         player.pay(tax.amount, self.bank)
 
     def resolve_card_effect(self, player: Player, card: Enum):
-        # Implement logic for resolving the effects of Chance or Community Chest cards
-        pass
+        if (
+            card == ChanceCards.ADVANCE_TO_GO
+            or card == CommunityChestCards.ADVANCE_TO_GO
+        ):
+            player.advance_to_go()
+        elif card == ChanceCards.BANK_DIVIDEND:
+            player.earn(amount=50)
+        elif card == ChanceCards.GO_TO_JAIL or card == CommunityChestCards.GO_TO_JAIL:
+            player.go_to_jail()
+        elif card == ChanceCards.ADVANCE_TO_ILLINOIS:
+            player.advance_to_illinois()
+        elif card == ChanceCards.ADVANCE_TO_ST_CHARLES:
+            player.advance_to_st_charles()
+        elif card == ChanceCards.NEAREST_UTILITY:
+            player.advance_to_nearest_utility()
+            utility: Utility = self.board.tiles[player.get_position()]
+
+            def handle_advance_to_utility():
+                if utility.owner is None:
+                    if player.decide_to_buy_property(utility):
+                        player.buy_property(utility)
+                elif utility.owner != player and utility.owner.is_in_game:
+                    # Player pays rent based on dice roll
+                    d1, d2 = self.roll_dice()
+                    rent = (d1 + d2) * 10
+                    player.pay(rent, utility.owner)
+
+            handle_advance_to_utility()
+        elif card == ChanceCards.NEAREST_RAILROAD:
+            player.advance_to_nearest_railroad()
+            railroad: RailRoad = self.board.tiles[player.get_position()]
+
+            def handle_advance_to_railroad():
+                if railroad.owner is None:
+                    if player.decide_to_buy_property(railroad):
+                        player.buy_property(railroad)
+                elif railroad.owner != player and railroad.owner.is_in_game:
+                    rent = railroad.calculate_rent(player)
+                    player.pay(rent * 2, railroad.owner)
+
+            handle_advance_to_railroad()
+        elif card == ChanceCards.READING_RAILROAD:
+            player.advance_to_reading_railroad()
+            railroad: RailRoad = self.board.tiles[player.get_position()]
+            self.handle_railroad_landing(player, railroad)
+        elif card == ChanceCards.BOARDWALK:
+            player.advance_to_boardwalk()
+            boardwalk: Street = self.board.tiles[player.get_position()]
+            self.handle_street_landing(player, boardwalk)
+        elif card == ChanceCards.CHAIRMAN:
+            for i in range(len(self.players)):
+                if i != self.current_player_index:
+                    player.pay(50, self.players[i])
+        elif card == ChanceCards.BUILDING_LOAN:
+            player.earn(150)
+        elif (
+            card == ChanceCards.STREET_REPAIRS
+            or card == CommunityChestCards.STREET_REPAIRS
+        ):
+            player.pay(player.determine_street_repair_fee(), self.bank)
+        elif card == ChanceCards.POOR_TAX:
+            player.pay(15, self.bank)
+        elif card == ChanceCards.GENERAL_REPAIRS:
+            player.pay(player.determine_general_repair_fee(), self.bank)
+        elif card == ChanceCards.GET_OUT_OF_JAIL_FREE:
+            player.chance_jail_free_card = True
+        elif card == ChanceCards.GO_BACK_THREE:
+            player.go_back_three(len(self.board.tiles))
+        elif CommunityChestCards.BANK_ERROR:
+            player.earn(200)
+        elif CommunityChestCards.DOCTOR_FEE:
+            player.pay(50, self.bank)
+        elif CommunityChestCards.STOCK_SALE:
+            player.earn(50)
+        elif CommunityChestCards.GO_TO_JAIL:
+            player.go_to_jail()
+        elif CommunityChestCards.GET_OUT_OF_JAIL_FREE:
+            player.community_chest_jail_free_card = True
+        elif CommunityChestCards.HOLIDAY_FUND:
+            player.earn(100)
+        elif CommunityChestCards.INCOME_TAX_REFUND:
+            player.earn(20)
+        elif CommunityChestCards.BIRTHDAY:
+            for i in range(len(self.players)):
+                if i != self.current_player_index:
+                    other_player = self.players[i]
+                    other_player.pay(10, player)
+        elif CommunityChestCards.LIFE_INSURANCE:
+            player.earn(100)
+        elif CommunityChestCards.SCHOOL_FEES:
+            player.pay(50, self.bank)
+        elif CommunityChestCards.CONSULTANCY_FEE:
+            player.earn(25)
+        elif CommunityChestCards.BEAUTY_CONTEST:
+            player.earn(10)
+        elif CommunityChestCards.INHERITANCE:
+            player.earn(100)
 
     def attempt_jail_break(
         self, player: Player
@@ -995,7 +1130,7 @@ class Game:
             use_card = player.decide_to_use_jail_free_card()
             if use_card:
                 player.use_jail_free_card()
-                player.jail_roll_attempts()
+                player.reset_jail_roll_attempts()
                 d1, d2 = self.roll_dice()
                 return (False, d1, d2)
 
@@ -1012,7 +1147,7 @@ class Game:
                     return (True, None, None)
 
         # If all attempts to roll a double fail, the player pays $50
-        player.pay(50)
+        player.pay(50, to=self.bank)
         if player.is_in_game:
             player.reset_jail_roll_attempts()
             d1, d2 = self.roll_dice()
@@ -1021,35 +1156,89 @@ class Game:
             return (True, -1, -1)
 
     def simulate_game(self):
-        while not self.check_win_condition():
+        winner = None
+        while not winner:
             self.play_turn()
-        winner = [p for p in self.players if p.is_in_game][0]
+            winner = self.check_win_condition()
         return winner
 
 
-# class MonteCarloSimulation:
-#     def __init__(self, runs):
-#         self.runs = runs
+class MonteCarloSimulation:
+    def __init__(self, runs: int):
+        """
+        Initialize the simulation with the number of runs.
+        """
+        self.runs = runs
 
-#     def run(self):
-#         win_count = {}
-#         for i in range(self.runs):
-#             players = [
-#                 Player("Player 1", 0.8, 0.7, 0.6, 0.5),
-#                 Player("Player 2", 0.6, 0.8, 0.7, 0.4),
-#                 Player("Player 3", 0.7, 0.6, 0.8, 0.6),
-#                 Player("Player 4", 0.5, 0.5, 0.5, 0.5),
-#             ]
-#             game = Game(players)
-#             winner = game.simulate_game()
-#             if winner.name not in win_count:
-#                 win_count[winner.name] = 0
-#             win_count[winner.name] += 1
+    def run(self):
+        """
+        Run the Monte Carlo simulation.
+        Returns:
+            dict: A dictionary mapping player names to the number of wins.
+        """
+        win_count = {}
 
-#         return win_count
+        for _ in range(self.runs):
+            # Create players with differing strategies
+            players = [
+                Player(
+                    name="Player 1",
+                    w_buy_building=0.8,
+                    w_buy_railroad=0.7,
+                    w_buy_utility=0.6,
+                    w_roll_double_in_jail=0.5,
+                    w_use_jail_free_card=0.5,
+                    min_cash=200,
+                    min_cash_to_unmortgage=300,
+                ),
+                Player(
+                    name="Player 2",
+                    w_buy_building=0.6,
+                    w_buy_railroad=0.8,
+                    w_buy_utility=0.7,
+                    w_roll_double_in_jail=0.4,
+                    w_use_jail_free_card=0.6,
+                    min_cash=200,
+                    min_cash_to_unmortgage=300,
+                ),
+                Player(
+                    name="Player 3",
+                    w_buy_building=0.7,
+                    w_buy_railroad=0.6,
+                    w_buy_utility=0.8,
+                    w_roll_double_in_jail=0.6,
+                    w_use_jail_free_card=0.7,
+                    min_cash=200,
+                    min_cash_to_unmortgage=300,
+                ),
+                Player(
+                    name="Player 4",
+                    w_buy_building=0.5,
+                    w_buy_railroad=0.5,
+                    w_buy_utility=0.5,
+                    w_roll_double_in_jail=0.5,
+                    w_use_jail_free_card=0.5,
+                    min_cash=200,
+                    min_cash_to_unmortgage=300,
+                ),
+            ]
+
+            # Initialize the Game with all four players
+            game = Game(*players)
+
+            # Simulate the game and retrieve the winner
+            winner = game.simulate_game()
+            print("Game is done!")
+
+            # Tally the wins
+            if winner.name not in win_count:
+                win_count[winner.name] = 0
+            win_count[winner.name] += 1
+
+        return win_count
 
 
-# Running the Monte Carlo simulation
-# simulation = MonteCarloSimulation(10000)
+# Example usage:
+# simulation = MonteCarloSimulation(runs=10000)
 # results = simulation.run()
 # print("Win counts:", results)
