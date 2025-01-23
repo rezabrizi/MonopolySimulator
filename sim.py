@@ -822,7 +822,7 @@ class Player:
         return [
             property
             for _group, properties in self.streets.items()
-            if len(properties) == 3
+            if len(properties) == Street.GROUP_COUNTS[_group]
             for property in properties
             if property.level >= 2
         ]

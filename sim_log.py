@@ -780,6 +780,7 @@ class Player:
         GAME_LOGS.append(
             f"{self.name} pays {amount}. Remaining cash={self.cash - amount}."
         )
+        self.cash -= amount
         to.earn(amount=amount)
 
     def earn(self, amount: int):
@@ -841,7 +842,7 @@ class Player:
         return [
             p
             for _g, props in self.streets.items()
-            if len(props) == Street.GROUP_COUNTS[p.group]
+            if len(props) == Street.GROUP_COUNTS[_g]
             for p in props
             if p.level >= 2
         ]
@@ -1261,22 +1262,24 @@ class Game:
 
         # Run the normal loop, but break if too many turns.
         while not winner and turn_count < max_turns:
-            print(turn_count)
             logs = self.play_turn()
             if logs:
                 GAME_LOGS.extend(logs)
             winner = self.check_win_condition()
             turn_count += 1
 
-        if not winner:
+        if winner == None:
+            winner = -1
+
+        if winner == -1:
             GAME_LOGS.append(f"No winner after {max_turns} turns => stopping.")
         else:
             GAME_LOGS.append(f"WINNER after {turn_count} turns: {winner.name}.")
 
         # Once done, dump all logs to a text file
-        with open("full_detailed_logs.txt", "w", encoding="utf-8") as f:
-            for line in GAME_LOGS:
-                f.write(line + "\n")
+        # with open("full_detailed_logs.txt", "w", encoding="utf-8") as f:
+        #     for line in GAME_LOGS:
+        #         f.write(line + "\n")
 
         return winner
 
@@ -1333,9 +1336,14 @@ class MonteCarloSimulation:
             ]
             game = Game(*players)
             w = game.simulate_game()
-            if w and w.name not in win_count:
+            if w == -1:
+                if "no_winner" in win_count:
+                    win_count["no_winner"] += 1
+                else:
+                    win_count["no_winner"] = 0
+            elif w and w.name not in win_count:
                 win_count[w.name] = 0
-            if w:
+            elif w:
                 win_count[w.name] += 1
         return win_count
 
