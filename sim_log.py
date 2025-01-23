@@ -6,13 +6,19 @@ from typing import Dict, Optional, List, Tuple, Union
 from enum import Enum
 from collections import deque
 
+# We'll keep a global (or module-level) logger list. Every method appends
+# to this list with a message. At the end, we write it out to a file.
+GAME_LOGS = []
+
 
 class Board:
     def __init__(self):
+        GAME_LOGS.append("Initializing Board...")
         self.tiles = []
         self.initialize_board()
 
     def initialize_board(self):
+        GAME_LOGS.append("Board.initialize_board() called.")
         self.tiles: list[Block] = [
             Block(type="go", number=1),  # GO
             Street(
@@ -284,10 +290,10 @@ class CommunityChestCards(Enum):
 
 
 class Block(ABC):
-
     def __init__(self, type, number):
         self.type = type
         self.number = number
+        GAME_LOGS.append(f"Created Block: {self.type}, number={self.number}")
 
 
 class Chance(Block):
@@ -299,12 +305,14 @@ class Chance(Block):
     @classmethod
     def get_chance_card(cls):
         card = cls.chance_deque.pop()
+        GAME_LOGS.append(f"Chance Card Drawn: {card.value}")
         if card != ChanceCards.GET_OUT_OF_JAIL_FREE:
             cls.chance_deque.appendleft(card)
         return card
 
     @classmethod
     def put_jail_free_card_back(cls):
+        GAME_LOGS.append("Putting Chance Jail Free Card back on top of deck.")
         cls.chance_deque.appendleft(ChanceCards.GET_OUT_OF_JAIL_FREE)
 
 
@@ -319,12 +327,14 @@ class CommunityChest(Block):
     @classmethod
     def get_community_chest_card(cls):
         card = cls.community_chest_deque.pop()
+        GAME_LOGS.append(f"Community Chest Card Drawn: {card.value}")
         if card != CommunityChestCards.GET_OUT_OF_JAIL_FREE:
             cls.community_chest_deque.appendleft(card)
         return card
 
     @classmethod
     def put_jail_free_card_back(cls):
+        GAME_LOGS.append("Putting Community Chest Jail Free Card back on top of deck.")
         cls.community_chest_deque.appendleft(CommunityChestCards.GET_OUT_OF_JAIL_FREE)
 
 
@@ -335,6 +345,9 @@ class Tax(Block):
         self.amount = amount
 
     def apply_tax(self, player: "Player"):
+        GAME_LOGS.append(
+            f"{player.name} landed on Tax: {self.name}, must pay {self.amount}"
+        )
         player.pay(self.amount)
 
 
@@ -346,7 +359,7 @@ class Property(Block):
         self.mortgage = self.price // 2
         self.unmortgage = self.mortgage * 1.1
         self.mortgaged = False
-        self.owner: Optional[Player] = None
+        self.owner: Optional["Player"] = None
 
     @abstractmethod
     def calculate_rent(self):
@@ -358,13 +371,11 @@ class Utility(Property):
         super().__init__(name, price, number)
 
     def calculate_rent(self, dice_roll, player):
-        if self.owner is None:
+        if self.owner is None or self.mortgaged or self.owner == player:
             return 0
-        if self.mortgaged == True:
-            return 0
-        if self.owner == player:
-            return 0
-        return dice_roll * (10 if len(self.owner.utilities) == 2 else 4)
+        rent_val = dice_roll * (10 if len(self.owner.utilities) == 2 else 4)
+        GAME_LOGS.append(f"Utility rent calculated: {rent_val} (dice={dice_roll})")
+        return rent_val
 
 
 class RailRoad(Property):
@@ -373,14 +384,14 @@ class RailRoad(Property):
         self.rent = rent
 
     def calculate_rent(self, player):
-        if self.owner is None:
-            return 0
-        if self.mortgaged == True:
-            return 0
-        if self.owner == player:
+        if self.owner is None or self.mortgaged or self.owner == player:
             return 0
         railroads_owned = len(self.owner.railroads)
-        return self.rent[railroads_owned - 1]
+        rent_val = self.rent[railroads_owned - 1]
+        GAME_LOGS.append(
+            f"Railroad rent calculated: {rent_val} (RRs owned={railroads_owned})"
+        )
+        return rent_val
 
 
 class StreetGroups(Enum):
@@ -419,11 +430,7 @@ class Street(Property):
         self.house_price = house_price
         self.group = group
         self.rent = rent
-        # level 0 - normal rent
-        # level 1 - all cards owned
-        # level 2:5 - houses 1 to 4
-        # level 6 - hotel
-        self.level = 0
+        self.level = 0  # 0=normal,1=own group,2..5=houses,5=full houses, or so
 
     def __repr__(self):
         return (
@@ -433,21 +440,22 @@ class Street(Property):
         )
 
     def calculate_rent(self, player):
-        if self.owner is None:
+        if self.owner is None or self.mortgaged or self.owner == player:
             return 0
-        if self.mortgaged == True:
-            return 0
-        if self.owner == player:
-            return 0
-        return self.rent[self.level]
+        rent_val = self.rent[self.level]
+        GAME_LOGS.append(f"Street rent calculated: {rent_val} (level={self.level})")
+        return rent_val
 
 
 class Bank:
     def __init__(self):
-        pass
+        GAME_LOGS.append("Bank created.")
 
     def earn(self, amount):
-        pass
+        # The bank in Monopoly doesn't exactly "track" its money, so no effect.
+        GAME_LOGS.append(
+            f"Bank earned {amount}, but bank funds are unlimited in normal Monopoly."
+        )
 
 
 class Player:
@@ -474,7 +482,6 @@ class Player:
         self.consecutive_doubles: int = 0
         self.is_in_jail: bool = False
         self.cash: int = 1500
-        # self.liquidity: int = 1500
         self.streets: Dict[str, List[Street]] = {}
         self.railroads: List[RailRoad] = []
         self.utilities: List[Utility] = []
@@ -484,32 +491,31 @@ class Player:
         self.community_chest_jail_free_card: bool = False
         self.chance_jail_free_card: bool = False
 
+        GAME_LOGS.append(f"Created Player {self.name} with ${self.cash}.")
+
     def __repr__(self):
         return (
-            f"P('{self.name}', "
-            f"cash={self.cash}, "
-            # f"liquidity={self.liquidity}, "
-            f"position={self.position}, "
-            f"is_in_jail={self.is_in_jail}, "
-            f"jail_roll_attempts={self.jail_roll_attempts}, "
-            f"streets_owned={len(self.streets)}, "
-            f"railroads_owned={len(self.railroads)}, "
-            f"utilities_owned={len(self.utilities)}, "
-            f"is_in_game={self.is_in_game}"
-            f")"
+            f"P('{self.name}', cash={self.cash}, position={self.position}, "
+            f"is_in_jail={self.is_in_jail}, jail_roll_attempts={self.jail_roll_attempts}, "
+            f"streets_owned={len(self.streets)}, railroads_owned={len(self.railroads)}, "
+            f"utilities_owned={len(self.utilities)}, is_in_game={self.is_in_game})"
         )
 
     def has_jail_free_card(self) -> bool:
         return self.community_chest_jail_free_card or self.chance_jail_free_card
 
     def decide_to_use_jail_free_card(self) -> bool:
-        return random.random() < self.w_use_jail_free_card
+        val = random.random() < self.w_use_jail_free_card
+        GAME_LOGS.append(f"{self.name} deciding to use Jail Free Card: {val}")
+        return val
 
     def use_jail_free_card(self) -> None:
         if self.chance_jail_free_card:
+            GAME_LOGS.append(f"{self.name} used CHANCE Jail Free Card.")
             self.chance_jail_free_card = False
             Chance.put_jail_free_card_back()
         elif self.community_chest_jail_free_card:
+            GAME_LOGS.append(f"{self.name} used COMMUNITY CHEST Jail Free Card.")
             self.community_chest_jail_free_card = False
             CommunityChest.put_jail_free_card_back()
         else:
@@ -518,28 +524,38 @@ class Player:
             )
 
     def reset_jail_roll_attempts(self):
+        GAME_LOGS.append(
+            f"{self.name} reset jail roll attempts from {self.jail_roll_attempts} to 0."
+        )
         self.jail_roll_attempts = 0
 
     def decide_to_roll_for_doubles(self) -> bool:
-        return random.random() < self.w_roll_double_in_jail
+        val = random.random() < self.w_roll_double_in_jail
+        GAME_LOGS.append(f"{self.name} deciding to roll for doubles: {val}")
+        return val
 
     def advance_to_illinois(self) -> None:
+        GAME_LOGS.append(f"{self.name} advanced to Illinois Ave.")
         if self.position > 24:
             self.earn(200)
         self.position = 24
 
     def advance_to_st_charles(self) -> None:
+        GAME_LOGS.append(f"{self.name} advanced to St. Charles Place.")
         if self.position > 11:
             self.earn(200)
         self.position = 11
 
     def advance_to_nearest_utility(self):
+        GAME_LOGS.append(f"{self.name} advanced to nearest Utility.")
         if self.position < 12:
             self.position = 12
         else:
             self.position = 28
 
     def advance_to_nearest_railroad(self):
+        GAME_LOGS.append(f"{self.name} advanced to nearest Railroad.")
+        # Replaced the multiple if's with if/elif to avoid skipping to 35 each time:
         if self.position < 5 or self.position > 35:
             self.position = 5
         elif self.position < 15:
@@ -550,15 +566,18 @@ class Player:
             self.position = 35
 
     def advance_to_reading_railroad(self):
+        GAME_LOGS.append(f"{self.name} advanced to Reading Railroad.")
         if self.position > 5:
             self.earn(200)
         self.position = 5
 
     def advance_to_go(self):
+        GAME_LOGS.append(f"{self.name} advanced to GO, collecting 200.")
         self.position = 0
         self.earn(200)
 
     def advance_to_boardwalk(self):
+        GAME_LOGS.append(f"{self.name} advanced to Boardwalk.")
         self.position = 39
 
     def determine_street_repair_fee(self):
@@ -570,6 +589,7 @@ class Player:
                 elif street.level >= 2:
                     num_houses = street.level - 1
                     total += 40 * num_houses
+        GAME_LOGS.append(f"{self.name} must pay a street repair fee of {total}.")
         return total
 
     def determine_general_repair_fee(self):
@@ -581,13 +601,17 @@ class Player:
                 elif street.level >= 2:
                     num_houses = street.level - 1
                     total += 25 * num_houses
+        GAME_LOGS.append(f"{self.name} must pay a general repair fee of {total}.")
         return total
 
     def go_back_three(self, board_size: int):
+        oldpos = self.position
         self.position = (self.position - 3 + board_size) % board_size
+        GAME_LOGS.append(
+            f"{self.name} goes back 3 spaces from {oldpos} to {self.position}."
+        )
 
     def get_valid_expandable_sets(self) -> Dict[str, List[Street]]:
-        """Get a dictionary of all the compeleted sets that still have capacity to build houses on"""
         sets: Dict[str, List[Street]] = {}
         for group, properties in self.streets.items():
             if (
@@ -596,18 +620,14 @@ class Player:
                 and all(not prop.mortgaged for prop in properties)
             ):
                 sets[group] = properties
-
         return sets
 
     def buy_houses_and_hotels(self, priority: str = "quantity_price"):
-        """
-        Buy houses and hotels based on the specified priority:
-        - "random": Randomize the order of groups.
-        - "quantity_price": Sort groups based on total house levels and minimum house price.
-        """
         from random import shuffle
 
-        # Get all completed sets that can still be expanded (not maxed out)
+        GAME_LOGS.append(
+            f"{self.name} is attempting to buy houses/hotels with priority={priority}."
+        )
         completed_sets = self.get_valid_expandable_sets()
 
         def get_groups_based_on_random():
@@ -621,18 +641,13 @@ class Player:
                 for item in sorted(
                     completed_sets.items(),
                     key=lambda item: (
-                        sum(
-                            prop.level for prop in item[1]
-                        ),  # Total house levels in the group
-                        min(
-                            prop.house_price for prop in item[1]
-                        ),  # Minimum house price
+                        sum(prop.level for prop in item[1]),
+                        min(prop.house_price for prop in item[1]),
                     ),
                 )
             ]
             return groups
 
-        # Determine group order based on the priority
         if priority == "random":
             groups = get_groups_based_on_random()
         elif priority == "quantity_price":
@@ -640,116 +655,106 @@ class Player:
         else:
             raise ValueError("Invalid priority. Use 'random' or 'quantity_price'.")
 
-        # Continue building while there is cash above min_cash
         while self.cash > self.min_cash:
-            built = False  # Track if any house was built in this iteration
-
-            # Iterate through the prioritized groups
+            built_any = False
             for group in groups:
                 properties = completed_sets[group]
-
-                # Find the properties with the minimum house level in the group
-                min_level = min(property.level for property in properties)
-                # If the group has hotels built on all of the streets then go to the next group
+                min_level = min(prop.level for prop in properties)
                 if min_level == 5:
                     continue
-
-                target_properties = [
-                    property for property in properties if property.level == min_level
-                ]
-
-                # Attempt to build one house on each property with the least houses in the group
-                for property in target_properties:
-                    if self.cash - property.house_price >= self.min_cash:
-                        self.buy_house(property)
-                        built = True
+                target_props = [pr for pr in properties if pr.level == min_level]
+                for pr in target_props:
+                    if self.cash - pr.house_price >= self.min_cash:
+                        GAME_LOGS.append(
+                            f"{self.name} buys a house on {pr.name} for {pr.house_price}."
+                        )
+                        self.buy_house(pr)
+                        built_any = True
                     else:
-                        break  # Stop if funds are insufficient for further houses
-
-            # Break the loop if no houses were built in this iteration
-            if not built:
+                        GAME_LOGS.append(
+                            f"{self.name} cannot afford a house on {pr.name}."
+                        )
+                        break
+            if not built_any:
                 break
 
     def unmortgage_properties(self):
-        # Filter mortgaged properties by group
+        GAME_LOGS.append(f"{self.name} attempts to unmortgage properties.")
         mortgaged_groups = {
-            group: properties
-            for group, properties in self.streets.items()
-            if any(prop.mortgaged for prop in properties)
+            group: props
+            for group, props in self.streets.items()
+            if any(prop.mortgaged for prop in props)
         }
-
         sorted_groups = sorted(
             mortgaged_groups.items(),
             key=lambda item: len(item[1]),
             reverse=True,
         )
 
-        for group, properties in sorted_groups:
-            for property in properties:
+        for group, props in sorted_groups:
+            for pr in props:
                 if (
-                    property.mortgaged
-                    and self.cash - property.unmortgage >= self.min_cash_to_unmortgage
+                    pr.mortgaged
+                    and self.cash - pr.unmortgage >= self.min_cash_to_unmortgage
                 ):
-                    self.cash -= property.unmortgage
-                    # self.liquidity -= property.unmortgage
-                    property.mortgaged = False
+                    GAME_LOGS.append(
+                        f"{self.name} unmortgages {pr.name} for {pr.unmortgage}."
+                    )
+                    self.cash -= pr.unmortgage
+                    pr.mortgaged = False
 
     def transfer_ownership_of_all_assets_to_another_player(self, other: "Player"):
-        # CASH
+        GAME_LOGS.append(f"{self.name} is transferring all assets to {other.name}.")
         other.earn(self.cash)
         self.cash = 0
-        # self.liquidity = 0
 
-        # STREETS
         for group, streets in self.streets.items():
-            for street in streets:
-                street.owner = other
-                other.receive_street(street)
+            for st in streets:
+                st.owner = other
+                other.receive_street(st)
         self.streets.clear()
 
-        # RAILROADS
         while self.railroads:
-            current_railroad = self.railroads.pop()
-            current_railroad.owner = other
-            other.railroads.append(current_railroad)
+            rr = self.railroads.pop()
+            rr.owner = other
+            other.railroads.append(rr)
 
-        # UTILITIES
         while self.utilities:
-            current_utility = self.utilities.pop()
-            current_utility.owner = other
-            other.utilities.append(current_utility)
+            ut = self.utilities.pop()
+            ut.owner = other
+            other.utilities.append(ut)
 
-        # JAIL FREE CARDS
         if self.community_chest_jail_free_card:
+            GAME_LOGS.append(
+                f"{self.name} also gives COMMUNITY CHEST Jail Free card to {other.name}."
+            )
             other.community_chest_jail_free_card = True
         if self.chance_jail_free_card:
+            GAME_LOGS.append(
+                f"{self.name} also gives CHANCE Jail Free card to {other.name}."
+            )
             other.chance_jail_free_card = True
 
     def transfer_ownership_of_all_assets_to_the_bank(self, to: Bank):
-        ## TODO: Technically bank should auction everything
-        ## However for now this implementation just frees the cards so they can be repurchased
+        GAME_LOGS.append(f"{self.name} is transferring all assets back to the Bank.")
         self.cash = 0
-        # self.liquidity = 0
-
         for group, streets in self.streets.items():
-            for street in streets:
-                street.owner = None
+            for st in streets:
+                st.owner = None
         self.streets.clear()
-
-        # RAILROADS
         while self.railroads:
-            current_railroad = self.railroads.pop()
-            current_railroad.owner = None
-
-        # UTILITIES
+            rr = self.railroads.pop()
+            rr.owner = None
         while self.utilities:
-            current_utility = self.utilities.pop()
-            current_utility.owner = None
-
-        # JAIL FREE CARDS
+            ut = self.utilities.pop()
+            ut.owner = None
         if self.community_chest_jail_free_card:
+            GAME_LOGS.append(
+                f"{self.name} returns COMMUNITY CHEST Jail Free card to deck."
+            )
             CommunityChest.put_jail_free_card_back()
         if self.chance_jail_free_card:
+            GAME_LOGS.append(f"{self.name} returns CHANCE Jail Free card to deck.")
             Chance.put_jail_free_card_back()
 
     def receive_street(self, street: Street) -> None:
@@ -764,155 +769,159 @@ class Player:
             self.transfer_ownership_of_all_assets_to_the_bank(to)
 
     def pay(self, amount, to: Union["Player", Bank]):
+        GAME_LOGS.append(f"{self.name} must pay {amount} to {to.__class__.__name__}.")
         if self.cash < amount:
             self.raise_fund(amount=amount)
-
         if self.cash < amount:
+            GAME_LOGS.append(f"{self.name} cannot pay and is going bankrupt!")
             self.is_in_game = False
             self.transfer_ownership_of_all_assets(to)
             return
+        GAME_LOGS.append(
+            f"{self.name} pays {amount}. Remaining cash={self.cash - amount}."
+        )
         to.earn(amount=amount)
 
     def earn(self, amount: int):
+        GAME_LOGS.append(f"{self.name} earns {amount}. Old cash={self.cash}.")
         self.cash += amount
-        # self.liquidity += amount
 
     def decide_to_buy_property_random(
         self, property: Union[Street, RailRoad, Utility]
     ) -> bool:
+        val = False
         if isinstance(property, Street):
-            return random.random() < self.w_buy_building
+            val = random.random() < self.w_buy_building
         elif isinstance(property, RailRoad):
-            return random.random() < self.w_buy_railroad
+            val = random.random() < self.w_buy_railroad
         elif isinstance(property, Utility):
-            return random.random() < self.w_buy_utility
-        return False
+            val = random.random() < self.w_buy_utility
+        GAME_LOGS.append(f"{self.name} random buy-decision for {property.name}: {val}")
+        return val
 
     def decide_to_buy_property(self, property: Union[Street, RailRoad, Utility]):
         if self.cash - property.price < self.min_cash:
+            GAME_LOGS.append(
+                f"{self.name} cannot buy {property.name}, not enough cash after min_cash check."
+            )
             return False
         return self.decide_to_buy_property_random(property)
 
     def buy_property(self, property: "Property"):
         if property.owner is not None:
             return
+        GAME_LOGS.append(f"{self.name} buys {property.name} for {property.price}.")
         self.cash -= property.price
-        # self.liquidity -= property.price
-        # self.liquidity += property.mortgage
         property.owner = self
         if isinstance(property, Street):
             if property.group not in self.streets:
                 self.streets[property.group] = []
             self.streets[property.group].append(property)
-            if len(self.streets[property.group]) == 3:
-                for street in self.streets[property.group]:
-                    street.level = 1
+            # If this completes a set of 3 for that color, set all to level=1
+            if len(self.streets[property.group]) == Street.GROUP_COUNTS[property.group]:
+                for st in self.streets[property.group]:
+                    st.level = 1
+                GAME_LOGS.append(
+                    f"{self.name} now owns the full set for {property.group.name}; all set to level=1."
+                )
         elif isinstance(property, RailRoad):
             self.railroads.append(property)
         elif isinstance(property, Utility):
             self.utilities.append(property)
 
     def buy_house(self, property: "Street"):
+        GAME_LOGS.append(
+            f"{self.name} is buying a house on {property.name}, cost {property.house_price}."
+        )
         property.level += 1
         self.cash -= property.house_price
-        ##self.liquidity -= property.house_price
-        ##self.liquidity += property.house_price // 2
 
     def get_streets_with_houses(self):
+        # All that have level >=2 means at least 1 house built
         return [
-            property
-            for _group, properties in self.streets.items()
-            if len(properties) == 3
-            for property in properties
-            if property.level >= 2
+            p
+            for _g, props in self.streets.items()
+            if len(props) == Street.GROUP_COUNTS[p.group]
+            for p in props
+            if p.level >= 2
         ]
 
     def raise_fund(self, amount):
-        """This is one a hell of a function. It tries to raise funds by
-        1. Selling houses based on the cheapest house prices
-        2. Mortgaging properties with the least number of houses owned in the group and the cheapest price to mortgage
-        NOTE: It is assumed this function is only called if it is actually possible to achieve amount (total_assets > amount)
-        """
+        GAME_LOGS.append(
+            f"{self.name} is trying to raise funds to pay {amount}. Current cash={self.cash}."
+        )
 
         def raise_fund_by_selling_houses():
             streets_with_houses = self.get_streets_with_houses()
             streets_with_houses = sorted(
-                streets_with_houses,
-                key=lambda property: property.house_price,
-                reverse=True,
+                streets_with_houses, key=lambda pr: pr.house_price, reverse=True
             )
-
             while self.cash < amount and streets_with_houses:
-                property = streets_with_houses[-1]
-                self.cash += property.house_price // 2
-                ##self.liquidity -= property.house_price // 2
-                property.level -= 1
-                if property.level == 1:
-                    streets_with_houses.pop()
+                pr = streets_with_houses.pop()
+                # Sell one house => earn half
+                GAME_LOGS.append(
+                    f"{self.name} sells house on {pr.name}, gets {pr.house_price//2} back."
+                )
+                self.cash += pr.house_price // 2
+                pr.level -= 1
 
         def raise_fund_by_mortgaging_properties():
-            property_frequency: Dict[int, List[Property]] = {}
-            for _group, properties in self.streets.items():
-                if len(properties) not in property_frequency:
-                    property_frequency[len(properties)] = []
-                property_frequency[len(properties)].extend(properties)
-
+            GAME_LOGS.append(f"{self.name} tries mortgaging properties to raise funds.")
+            property_freq: Dict[int, List[Property]] = {}
+            for _g, props in self.streets.items():
+                freq = len(props)
+                property_freq.setdefault(freq, []).extend(props)
             if self.railroads:
-                if len(self.railroads) not in property_frequency:
-                    property_frequency[len(self.railroads)] = []
-                property_frequency[len(self.railroads)].extend(self.railroads)
+                property_freq.setdefault(len(self.railroads), []).extend(self.railroads)
             if self.utilities:
-                if len(self.utilities) not in property_frequency:
-                    property_frequency[len(self.utilities)] = []
-                property_frequency[len(self.utilities)].extend(self.utilities)
-
-            if not property_frequency:
+                property_freq.setdefault(len(self.utilities), []).extend(self.utilities)
+            if not property_freq:
                 return
-
-            property_frequency = dict(
+            property_freq = dict(
                 sorted(
-                    property_frequency.items(),
-                    key=lambda item: (
-                        item[0],
-                        min(property.mortgage for property in item[1]),
-                    ),
+                    property_freq.items(),
+                    key=lambda item: (item[0], min(pr.mortgage for pr in item[1])),
                 )
             )
-            if property_frequency:
-                for _freq, properties in property_frequency.items():
-                    for property in properties:
-                        if not property.mortgaged:
-                            self.cash += property.mortgage
-                            # self.liquidity -= property.mortgage
-                            property.mortgaged = True
-                        if self.cash >= amount:
-                            return
+            for _freq, props in property_freq.items():
+                for pr in props:
+                    if not pr.mortgaged:
+                        pr.mortgaged = True
+                        GAME_LOGS.append(
+                            f"{self.name} mortgages {pr.name} for {pr.mortgage}."
+                        )
+                        self.cash += pr.mortgage
+                    if self.cash >= amount:
+                        return
 
         raise_fund_by_selling_houses()
         if self.cash >= amount:
             return
-
         raise_fund_by_mortgaging_properties()
 
     def move(self, steps, board_size):
+        GAME_LOGS.append(f"{self.name} moves {steps} steps from {self.position}.")
         self.last_dice_roll = steps
-        self.position = self.position + steps
-        if self.position / board_size >= 1:
+        self.position += steps
+        if self.position // board_size >= 1:
+            # Passed GO
+            GAME_LOGS.append(f"{self.name} passed GO, +200.")
             self.cash += 200
-            # self.liquidity += 200
         self.position %= board_size
+        GAME_LOGS.append(f"{self.name} new position: {self.position}.")
 
     def get_position(self):
         return self.position
 
     def go_to_jail(self):
+        GAME_LOGS.append(f"{self.name} goes to Jail!")
         self.is_in_jail = True
         self.position = 10
 
 
 class Game:
     def __init__(self, p1, p2, p3=None, p4=None):
-        # Create a game board
+        GAME_LOGS.append("Initializing Game with players.")
         self.board = Board()
         self.players: List[Player] = [p1, p2]
         if p3:
@@ -923,37 +932,50 @@ class Game:
         self.current_player_index = 0
 
     def roll_dice(self):
-        return random.randint(1, 6), random.randint(1, 6)
+        d1, d2 = random.randint(1, 6), random.randint(1, 6)
+        GAME_LOGS.append(f"Dice rolled => ({d1}, {d2})")
+        return d1, d2
 
     def next_player(self):
+        old_index = self.current_player_index
         self.current_player_index = (self.current_player_index + 1) % len(self.players)
+        GAME_LOGS.append(
+            f"Next player: from index {old_index} to index {self.current_player_index}."
+        )
 
     def check_win_condition(self) -> Optional[Player]:
         active_players = [p for p in self.players if p.is_in_game]
         if len(active_players) == 1:
+            GAME_LOGS.append(
+                f"WIN CONDITION MET: {active_players[0].name} is the last active player."
+            )
             return active_players[0]
         return None
 
     def play_turn(self):
         logs = []
         player = self.players[self.current_player_index]
-
+        GAME_LOGS.append(f"--- TURN START :: {player.name} ---")
         if not player.is_in_game:
+            GAME_LOGS.append(f"{player.name} is out of the game, skipping.")
             self.next_player()
-            return
+            return logs
 
         d1, d2 = self.roll_dice()
         if player.is_in_jail:
-            logs.append(f"{player.name} is in jail. Attempting to get out...")
+            GAME_LOGS.append(f"{player.name} is in jail; attempting to get out.")
             skip, d1_j, d2_j = self.attempt_jail_break(player)
             if skip:
+                GAME_LOGS.append(f"{player.name} remains in jail, end turn.")
                 self.next_player()
                 return logs
-            if d1 and d2:
-                d1 = d1_j
-                d2 = d2_j
-        logs.append(f"{player.name} rolled dice ({d1}, {d2}) => {d1+d2}")
+            if d1_j and d2_j:
+                d1, d2 = d1_j, d2_j
+                GAME_LOGS.append(
+                    f"{player.name} got out of jail & rolled => ({d1},{d2})."
+                )
 
+        logs.append(f"{player.name} rolled dice ({d1}, {d2}) => {d1+d2}")
         old_position = player.get_position()
         player.move(d1 + d2, len(self.board.tiles))
         logs.append(
@@ -962,10 +984,12 @@ class Game:
         tile = self.board.tiles[player.position]
         self.handle_tile_landing(player, tile)
 
-        # DOUBLE DICE CHECKS
+        # Double checks
         if d1 == d2:
+            GAME_LOGS.append(f"{player.name} rolled a double.")
             player.consecutive_doubles += 1
             if player.consecutive_doubles == 3:
+                GAME_LOGS.append(f"{player.name} rolled 3 consecutive doubles => Jail!")
                 player.go_to_jail()
                 player.consecutive_doubles = 0
                 self.next_player()
@@ -973,13 +997,15 @@ class Game:
             player.consecutive_doubles = 0
             self.next_player()
 
-        # POST MOVE ACTIONS
+        # Post Move
         if player.is_in_game:
             player.unmortgage_properties()
             player.buy_houses_and_hotels()
+        GAME_LOGS.append(f"--- TURN END :: {player.name} ---\n")
         return logs
 
     def handle_tile_landing(self, player: Player, tile: Block):
+        GAME_LOGS.append(f"{player.name} landed on tile #{tile.number} ({tile.type}).")
         if isinstance(tile, Street):
             self.handle_street_landing(player, tile)
         elif isinstance(tile, RailRoad):
@@ -992,59 +1018,70 @@ class Game:
             self.handle_community_chest_landing(player, tile)
         elif isinstance(tile, Tax):
             self.handle_tax_landing(player, tile)
-        elif isinstance(tile, Block) and tile.type == "go_to_jail":
+        elif tile.type == "go_to_jail":
+            GAME_LOGS.append(f"{player.name} must go to jail from tile {tile.number}.")
             player.go_to_jail()
 
     def handle_street_landing(self, player: Player, street: Street):
         if street.owner is None:
-            # Player can buy the property if they have enough money
+            GAME_LOGS.append(f"{player.name} can buy {street.name} if desired.")
             if player.decide_to_buy_property(street):
                 player.buy_property(street)
         elif street.owner != player and street.owner.is_in_game:
-            # Player pays rent if the property is owned
             rent = street.calculate_rent(player)
+            if rent > 0:
+                GAME_LOGS.append(
+                    f"{player.name} pays rent {rent} to {street.owner.name} for {street.name}."
+                )
             player.pay(rent, street.owner)
 
     def handle_railroad_landing(self, player: Player, railroad: RailRoad):
         if railroad.owner is None:
-            # Player can buy the railroad if they have enough money
+            GAME_LOGS.append(
+                f"{player.name} can buy Railroad {railroad.name} if desired."
+            )
             if player.decide_to_buy_property(railroad):
                 player.buy_property(railroad)
         elif railroad.owner != player and railroad.owner.is_in_game:
-            # Player pays rent to the railroad owner
             rent = railroad.calculate_rent(player)
+            if rent > 0:
+                GAME_LOGS.append(
+                    f"{player.name} pays rent {rent} to {railroad.owner.name} for {railroad.name}."
+                )
             player.pay(rent, railroad.owner)
 
     def handle_utility_landing(self, player: Player, utility: Utility):
         if utility.owner is None:
-            # Player can buy the utility if they have enough money
+            GAME_LOGS.append(
+                f"{player.name} can buy Utility {utility.name} if desired."
+            )
             if player.decide_to_buy_property(utility):
                 player.buy_property(utility)
         elif utility.owner != player and utility.owner.is_in_game:
-            # Player pays rent based on dice roll
-            dice_roll = (
-                player.last_dice_roll
-            )  # Assuming dice roll is stored on the player
+            dice_roll = player.last_dice_roll
             rent = utility.calculate_rent(dice_roll, player)
+            if rent > 0:
+                GAME_LOGS.append(
+                    f"{player.name} pays {rent} to {utility.owner.name} (Utility rent)."
+                )
             player.pay(rent, utility.owner)
 
     def handle_chance_landing(self, player: Player, chance: Chance):
         card = Chance.get_chance_card()
-        # Handle the effect of the chance card
         self.resolve_card_effect(player, card)
 
     def handle_community_chest_landing(
         self, player: Player, community_chest: CommunityChest
     ):
         card = CommunityChest.get_community_chest_card()
-        # Handle the effect of the community chest card
         self.resolve_card_effect(player, card)
 
     def handle_tax_landing(self, player: Player, tax: Tax):
-        # Player pays the tax amount
+        GAME_LOGS.append(f"{player.name} landed on tax {tax.name}, cost {tax.amount}.")
         player.pay(tax.amount, self.bank)
 
     def resolve_card_effect(self, player: Player, card: Enum):
+        GAME_LOGS.append(f"Resolving card effect for {player.name}: {card.value}")
         if (
             card == ChanceCards.ADVANCE_TO_GO
             or card == CommunityChestCards.ADVANCE_TO_GO
@@ -1067,9 +1104,11 @@ class Game:
                     if player.decide_to_buy_property(utility):
                         player.buy_property(utility)
                 elif utility.owner != player and utility.owner.is_in_game:
-                    # Player pays rent based on dice roll
                     d1, d2 = self.roll_dice()
                     rent = (d1 + d2) * 10
+                    GAME_LOGS.append(
+                        f"{player.name} must pay 10x dice to Utility => {rent}."
+                    )
                     player.pay(rent, utility.owner)
 
             handle_advance_to_utility()
@@ -1082,8 +1121,9 @@ class Game:
                     if player.decide_to_buy_property(railroad):
                         player.buy_property(railroad)
                 elif railroad.owner != player and railroad.owner.is_in_game:
-                    rent = railroad.calculate_rent(player)
-                    player.pay(rent * 2, railroad.owner)
+                    rent = railroad.calculate_rent(player) * 2
+                    GAME_LOGS.append(f"{player.name} must pay 2x RR rent => {rent}.")
+                    player.pay(rent, railroad.owner)
 
             handle_advance_to_railroad()
         elif card == ChanceCards.READING_RAILROAD:
@@ -1095,112 +1135,153 @@ class Game:
             boardwalk: Street = self.board.tiles[player.get_position()]
             self.handle_street_landing(player, boardwalk)
         elif card == ChanceCards.CHAIRMAN:
-            for i in range(len(self.players)):
+            for i, pl in enumerate(self.players):
                 if i != self.current_player_index:
-                    player.pay(50, self.players[i])
+                    GAME_LOGS.append(
+                        f"{player.name} pays 50 to {pl.name} (Chairman card)."
+                    )
+                    player.pay(50, pl)
         elif card == ChanceCards.BUILDING_LOAN:
+            GAME_LOGS.append(f"{player.name} collects building loan of 150.")
             player.earn(150)
         elif (
             card == ChanceCards.STREET_REPAIRS
             or card == CommunityChestCards.STREET_REPAIRS
         ):
-            player.pay(player.determine_street_repair_fee(), self.bank)
+            fee = player.determine_street_repair_fee()
+            player.pay(fee, self.bank)
         elif card == ChanceCards.POOR_TAX:
+            GAME_LOGS.append(f"{player.name} pays poor tax of 15.")
             player.pay(15, self.bank)
         elif card == ChanceCards.GENERAL_REPAIRS:
-            player.pay(player.determine_general_repair_fee(), self.bank)
+            fee = player.determine_general_repair_fee()
+            player.pay(fee, self.bank)
         elif card == ChanceCards.GET_OUT_OF_JAIL_FREE:
+            GAME_LOGS.append(f"{player.name} receives GET OUT OF JAIL FREE (Chance).")
             player.chance_jail_free_card = True
         elif card == ChanceCards.GO_BACK_THREE:
             player.go_back_three(len(self.board.tiles))
-        elif CommunityChestCards.BANK_ERROR:
+        elif CommunityChestCards.BANK_ERROR == card:
+            GAME_LOGS.append(f"{player.name} collects bank error of 200.")
             player.earn(200)
-        elif CommunityChestCards.DOCTOR_FEE:
+        elif CommunityChestCards.DOCTOR_FEE == card:
             player.pay(50, self.bank)
-        elif CommunityChestCards.STOCK_SALE:
+        elif CommunityChestCards.STOCK_SALE == card:
             player.earn(50)
-        elif CommunityChestCards.GO_TO_JAIL:
+        elif CommunityChestCards.GO_TO_JAIL == card:
             player.go_to_jail()
-        elif CommunityChestCards.GET_OUT_OF_JAIL_FREE:
+        elif CommunityChestCards.GET_OUT_OF_JAIL_FREE == card:
+            GAME_LOGS.append(
+                f"{player.name} receives GET OUT OF JAIL FREE (CommChest)."
+            )
             player.community_chest_jail_free_card = True
-        elif CommunityChestCards.HOLIDAY_FUND:
+        elif CommunityChestCards.HOLIDAY_FUND == card:
             player.earn(100)
-        elif CommunityChestCards.INCOME_TAX_REFUND:
+        elif CommunityChestCards.INCOME_TAX_REFUND == card:
             player.earn(20)
-        elif CommunityChestCards.BIRTHDAY:
-            for i in range(len(self.players)):
+        elif CommunityChestCards.BIRTHDAY == card:
+            for i, pl in enumerate(self.players):
                 if i != self.current_player_index:
-                    other_player = self.players[i]
-                    other_player.pay(10, player)
-        elif CommunityChestCards.LIFE_INSURANCE:
+                    GAME_LOGS.append(f"{pl.name} pays 10 to {player.name} (Birthday).")
+                    pl.pay(10, player)
+        elif CommunityChestCards.LIFE_INSURANCE == card:
             player.earn(100)
-        elif CommunityChestCards.SCHOOL_FEES:
+        elif CommunityChestCards.SCHOOL_FEES == card:
             player.pay(50, self.bank)
-        elif CommunityChestCards.CONSULTANCY_FEE:
+        elif CommunityChestCards.CONSULTANCY_FEE == card:
             player.earn(25)
-        elif CommunityChestCards.BEAUTY_CONTEST:
+        elif CommunityChestCards.BEAUTY_CONTEST == card:
             player.earn(10)
-        elif CommunityChestCards.INHERITANCE:
+        elif CommunityChestCards.INHERITANCE == card:
             player.earn(100)
 
     def attempt_jail_break(
         self, player: Player
     ) -> Tuple[bool, Optional[int], Optional[int]]:
-        # Check if the player has a "Get Out of Jail Free" card
+        GAME_LOGS.append(
+            f"{player.name} attempts jail break. So far tried {player.jail_roll_attempts} times."
+        )
         if player.has_jail_free_card():
             use_card = player.decide_to_use_jail_free_card()
             if use_card:
                 player.use_jail_free_card()
                 player.reset_jail_roll_attempts()
                 d1, d2 = self.roll_dice()
+                GAME_LOGS.append(
+                    f"{player.name} used a Jail Free card and rolled => ({d1},{d2})."
+                )
                 return (False, d1, d2)
 
-        # Check if the player has attempted rolling a double less than 3 times
         if player.jail_roll_attempts < 3:
             roll_doubles = player.decide_to_roll_for_doubles()
             if roll_doubles:
                 d1, d2 = self.roll_dice()
-                if d1 == d2:  # Player rolled a double
-                    player.reset_jail_roll_attempts()  # Reset attempts
+                GAME_LOGS.append(
+                    f"{player.name} tries for doubles => rolled ({d1},{d2})."
+                )
+                if d1 == d2:
+                    GAME_LOGS.append(
+                        f"{player.name} rolled doubles & is free from jail."
+                    )
+                    player.reset_jail_roll_attempts()
                     return (False, d1, d2)
-                else:  # Double not rolled, increment attempts
+                else:
                     player.jail_roll_attempts += 1
+                    GAME_LOGS.append(
+                        f"{player.name} did NOT roll doubles, attempt={player.jail_roll_attempts}."
+                    )
                     return (True, None, None)
 
-        # If all attempts to roll a double fail, the player pays $50
+        GAME_LOGS.append(
+            f"{player.name} paying 50 to get out of jail, or is bankrupt if they can't."
+        )
         player.pay(50, to=self.bank)
         if player.is_in_game:
             player.reset_jail_roll_attempts()
             d1, d2 = self.roll_dice()
+            GAME_LOGS.append(
+                f"{player.name} leaves jail after paying 50 => rolled ({d1},{d2})."
+            )
             return (False, d1, d2)
         else:
+            GAME_LOGS.append(f"{player.name} is bankrupt trying to leave jail.")
             return (True, -1, -1)
 
     def simulate_game(self):
+        GAME_LOGS.append("Starting simulate_game() with 10,000 turn cutoff.")
+        turn_count = 0
+        max_turns = 10000
         winner = None
-        while not winner:
-            self.play_turn()
+
+        # Run the normal loop, but break if too many turns.
+        while not winner and turn_count < max_turns:
+            logs = self.play_turn()
+            if logs:
+                GAME_LOGS.extend(logs)
             winner = self.check_win_condition()
+            turn_count += 1
+
+        if not winner:
+            GAME_LOGS.append(f"No winner after {max_turns} turns => stopping.")
+        else:
+            GAME_LOGS.append(f"WINNER after {turn_count} turns: {winner.name}.")
+
+        # Once done, dump all logs to a text file
+        with open("full_detailed_logs.txt", "w", encoding="utf-8") as f:
+            for line in GAME_LOGS:
+                f.write(line + "\n")
+
         return winner
 
 
 class MonteCarloSimulation:
     def __init__(self, runs: int):
-        """
-        Initialize the simulation with the number of runs.
-        """
         self.runs = runs
 
     def run(self):
-        """
-        Run the Monte Carlo simulation.
-        Returns:
-            dict: A dictionary mapping player names to the number of wins.
-        """
         win_count = {}
-
         for _ in range(self.runs):
-            # Create players with differing strategies
+            # Create players
             players = [
                 Player(
                     name="Player 1",
@@ -1243,25 +1324,17 @@ class MonteCarloSimulation:
                     min_cash_to_unmortgage=300,
                 ),
             ]
-
-            # Initialize the Game with all four players
             game = Game(*players)
-
-            # Simulate the game and retrieve the winner
-            winner = game.simulate_game()
+            w = game.simulate_game()
             print("Game is done!")
-
-            # Tally the wins
-            if winner.name not in win_count:
-                win_count[winner.name] = 0
-            win_count[winner.name] += 1
-
+            if w and w.name not in win_count:
+                win_count[w.name] = 0
+            if w:
+                win_count[w.name] += 1
         return win_count
 
 
 def tile_to_grid_position(tile_index: int) -> Tuple[int, int]:
-    # corners: 0 => bottom-left, 10 => top-left, 20 => top-right, 30 => bottom-right
-    # The board is an 11×11 grid, perimeter only
     if tile_index == 0:
         return (10, 0)
     elif 1 <= tile_index <= 9:
@@ -1284,23 +1357,21 @@ def tile_to_grid_position(tile_index: int) -> Tuple[int, int]:
 
 class MonopolyGUI:
     def __init__(self, root):
+        GAME_LOGS.append("Starting Monopoly GUI.")
         self.root = root
         self.root.title("Monopoly Board with Logs")
 
-        # Create example players
         self.players = [
             Player("Alice", 0.8, 0.7, 0.6, 0.5, 0.5, 200, 300),
             Player("Bob", 0.6, 0.8, 0.7, 0.4, 0.6, 200, 300),
         ]
         self.game = Game(*self.players)
 
-        # Frames: board on left, info/log on right
         self.board_frame = ttk.Frame(self.root, padding=5)
         self.board_frame.grid(row=0, column=0, sticky="nwes")
         self.info_frame = ttk.Frame(self.root, padding=5)
         self.info_frame.grid(row=0, column=1, sticky="nwes")
 
-        # 11×11 grid for board
         self.board_labels = []
         for r in range(11):
             row_list = []
@@ -1319,11 +1390,9 @@ class MonopolyGUI:
                 row_list.append(lbl)
             self.board_labels.append(row_list)
 
-        # Text area for player info + logs
         self.player_info_text = tk.Text(self.info_frame, width=35, height=30)
         self.player_info_text.pack(side="top", fill="both", expand=True)
 
-        # Next Turn button
         self.next_button = ttk.Button(
             self.info_frame, text="Next Turn", command=self.next_turn
         )
@@ -1336,12 +1405,10 @@ class MonopolyGUI:
         self.update_player_info()
 
     def update_board_labels(self):
-        # Clear all
         for r in range(11):
             for c in range(11):
                 self.board_labels[r][c].config(text="", background="#dddddd")
 
-        # Fill perimeter
         for i, tile in enumerate(self.game.board.tiles):
             row, col = tile_to_grid_position(i)
             txt = f"#{i} {tile.type}"
@@ -1351,7 +1418,6 @@ class MonopolyGUI:
                     txt += f"\nOwner: {tile.owner.name}"
                 if isinstance(tile, Street):
                     txt += f"\nLvl:{tile.level}"
-            # which players
             plrs = [p.name for p in self.players if p.is_in_game and p.position == i]
             if plrs:
                 txt += "\n[" + ", ".join(plrs) + "]"
@@ -1385,7 +1451,6 @@ class MonopolyGUI:
         if not winner:
             turn_logs = self.game.play_turn()
             self.update_gui()
-            # Print logs after current status
             if turn_logs:
                 self.player_info_text.insert(tk.END, "----- Turn Log -----\n")
                 for line in turn_logs:
