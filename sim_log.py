@@ -969,18 +969,19 @@ class Game:
                 GAME_LOGS.append(f"{player.name} remains in jail, end turn.")
                 self.next_player()
                 return logs
+            player.is_in_jail = False
             if d1_j and d2_j:
                 d1, d2 = d1_j, d2_j
                 GAME_LOGS.append(
                     f"{player.name} got out of jail & rolled => ({d1},{d2})."
                 )
 
-        logs.append(f"{player.name} rolled dice ({d1}, {d2}) => {d1+d2}")
+        # logs.append(f"{player.name} rolled dice ({d1}, {d2}) => {d1+d2}")
         old_position = player.get_position()
         player.move(d1 + d2, len(self.board.tiles))
-        logs.append(
-            f"{player.name} moved from {old_position} to {player.get_position()}."
-        )
+        # logs.append(
+        #    f"{player.name} moved from {old_position} to {player.get_position()}."
+        # )
         tile = self.board.tiles[player.position]
         self.handle_tile_landing(player, tile)
 
@@ -1001,8 +1002,13 @@ class Game:
         if player.is_in_game:
             player.unmortgage_properties()
             player.buy_houses_and_hotels()
+        self.add_player_states_to_logs()
         GAME_LOGS.append(f"--- TURN END :: {player.name} ---\n")
         return logs
+
+    def add_player_states_to_logs(self):
+        for player in self.players:
+            GAME_LOGS.append(player.__repr__())
 
     def handle_tile_landing(self, player: Player, tile: Block):
         GAME_LOGS.append(f"{player.name} landed on tile #{tile.number} ({tile.type}).")
@@ -1255,6 +1261,7 @@ class Game:
 
         # Run the normal loop, but break if too many turns.
         while not winner and turn_count < max_turns:
+            print(turn_count)
             logs = self.play_turn()
             if logs:
                 GAME_LOGS.extend(logs)
@@ -1326,7 +1333,6 @@ class MonteCarloSimulation:
             ]
             game = Game(*players)
             w = game.simulate_game()
-            print("Game is done!")
             if w and w.name not in win_count:
                 win_count[w.name] = 0
             if w:
